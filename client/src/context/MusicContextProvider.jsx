@@ -288,7 +288,31 @@ export const MusicContextProvider = ({ children }) => {
     
     try {
       const fetchedLyrics = await lyricsService.getLyrics(song);
-      setLyrics(fetchedLyrics);
+      
+      if (fetchedLyrics) {
+        // Ensure lyrics are in the proper format with processed time values
+        let processedLyrics = fetchedLyrics;
+        
+        // If there are no lines but there's plain text, create timed lines
+        if (!processedLyrics.lines && processedLyrics.plainLyrics) {
+          processedLyrics.lines = processedLyrics.plainLyrics
+            .split('\n')
+            .map((text, index) => ({
+              time: index * 5000, // 5 seconds per line
+              text: text.trim() || " "
+            }));
+        }
+        
+        // Ensure we have a lines array
+        if (!processedLyrics.lines) {
+          processedLyrics.lines = [];
+        }
+        
+        console.log('Lyrics ready for display:', processedLyrics);
+        setLyrics(processedLyrics);
+      } else {
+        setLyrics(null);
+      }
     } catch (error) {
       console.error('Error fetching lyrics:', error);
       setLyrics(null);

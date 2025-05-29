@@ -3,6 +3,7 @@ import axios from 'axios';
 class LyricsService {
   constructor() {
     this.cache = new Map(); // Cache lyrics by songId
+    this.timeMultiplier = 1000; // Default time multiplier for converting seconds to ms
   }
 
   /**
@@ -46,9 +47,12 @@ class LyricsService {
       });
       
       if (response.data?.success && response.data?.lyrics) {
+        // Process lyrics to ensure proper time format
+        const processedLyrics = this.processLyrics(response.data.lyrics);
+        
         // Store in cache before returning
-        this.cache.set(cacheKey, response.data.lyrics);
-        return response.data.lyrics;
+        this.cache.set(cacheKey, processedLyrics);
+        return processedLyrics;
       }
       
       return null;
@@ -56,6 +60,47 @@ class LyricsService {
       console.error('Error fetching lyrics:', error);
       return null;
     }
+  }
+  
+  /**
+   * Process lyrics to ensure consistent time format
+   * @param {Object} lyrics - Raw lyrics from API
+   * @returns {Object} - Processed lyrics with normalized time values
+   */
+  processLyrics(lyrics) {
+    if (!lyrics) return null;
+    
+    // Copy lyrics to avoid modifying the original object
+    const processedLyrics = { ...lyrics };
+    
+    // Process each line to ensure times are in milliseconds
+    if (Array.isArray(processedLyrics.lines)) {
+      processedLyrics.lines = processedLyrics.lines.map(line => {
+        // If line has a time property that seems to be in seconds, convert to ms
+        if (line.time !== undefined && typeof line.time === 'number' && line.time < 10000) {
+          return {
+            ...line,
+            time: Math.round(line.time * 1000) // Convert seconds to milliseconds
+          };
+        }
+        return line;
+      });
+      
+      // Sort lines by time for proper sequence
+      processedLyrics.lines.sort((a, b) => a.time - b.time);
+    } else if (processedLyrics.plainLyrics) {
+      // Generate timed lines from plain lyrics
+      processedLyrics.lines = processedLyrics.plainLyrics
+        .split('\n')
+        .map((text, index) => ({
+          time: index * 5000, // 5 seconds per line
+          text: text.trim() || " "
+        }));
+    } else {
+      processedLyrics.lines = [];
+    }
+    
+    return processedLyrics;
   }
   
   /**

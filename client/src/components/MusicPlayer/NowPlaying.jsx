@@ -85,7 +85,7 @@ const NowPlaying = () => {
               </div>
 
               {/* YouTube button */}
-              {/* {youtubeUrl && (
+              {youtubeUrl && (
                 <button 
                   className="youtube-button" 
                   onClick={openYouTube}
@@ -93,7 +93,7 @@ const NowPlaying = () => {
                 >
                   <i className="bi bi-youtube"></i> Open in YouTube
                 </button>
-              )} */}
+              )}
             </div>
           </div>
         ) : (

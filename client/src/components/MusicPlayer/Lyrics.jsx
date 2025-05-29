@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import lyricsService from '../../services/lyricsService'
 
-const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
+const Lyrics = ({ currentSong, currentPosition, lyrics: providedLyrics, isVisible = true }) => {
   const [lyrics, setLyrics] = useState(null)
   const [activeLyricIndex, setActiveLyricIndex] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -9,8 +9,16 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
   const lyricsContainerRef = useRef(null)
   const lastSongIdRef = useRef(null)
   
-  // Fetch lyrics when song changes AND component is visible
+  // Use provided lyrics if available, otherwise fetch lyrics
   useEffect(() => {
+    if (providedLyrics) {
+      setLyrics(providedLyrics);
+      setLoading(false);
+      setError(null);
+      lastSongIdRef.current = currentSong?.id;
+      return;
+    }
+    
     if (!currentSong || !isVisible || currentSong.id === lastSongIdRef.current) return;
     
     async function fetchLyrics() {
@@ -46,40 +54,45 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
         setError('Error loading lyrics');
       } finally {
         setLoading(false);
-        lastSongIdRef.current = currentSong.id;
+        lastSongIdRef.current = currentSong?.id;
       }
     }
     
     fetchLyrics();
-  }, [currentSong, isVisible])
+  }, [currentSong, isVisible, providedLyrics])
   
   // Update active lyric based on current playback position
   useEffect(() => {
     if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) return;
     
-    let activeIndex = 0;
+    // Convert current position to milliseconds for comparison with lyrics timestamps
+    const currentTimeMs = currentPosition * 1000;
+    let newActiveIndex = 0;
     
     // Find the last line that starts before current position
     for (let i = 0; i < lyrics.lines.length; i++) {
-      if (lyrics.lines[i].time <= currentPosition) {
-        activeIndex = i;
+      if (lyrics.lines[i].time <= currentTimeMs) {
+        newActiveIndex = i;
       } else {
         break;
       }
     }
     
-    if (activeIndex !== activeLyricIndex) {
-      setActiveLyricIndex(activeIndex);
+    if (newActiveIndex !== activeLyricIndex) {
+      setActiveLyricIndex(newActiveIndex);
       
       // Scroll active lyric into view with smooth scrolling
       const container = lyricsContainerRef.current;
       if (container) {
-        const activeElement = container.querySelector(`.lyric-line-${activeIndex}`);
+        const activeElement = container.querySelector(`.lyric-line-${newActiveIndex}`);
         if (activeElement) {
-          activeElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-          });
+          // Use smoother scrolling with a slight delay to ensure UI updates
+          setTimeout(() => {
+            activeElement.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center'
+            });
+          }, 100);
         }
       }
     }
