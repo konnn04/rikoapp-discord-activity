@@ -1,0 +1,74 @@
+/* Don't use @import for Bootstrap Icons here, we'll load them via vite */
+
+:root {
+  --primary-color: #6366f1;
+  --secondary-color: #10b981;
+  --background-dark: #0f172a;
+  --background-darker: #1e293b;
+  --text-light: #f8fafc;
+  --text-gray: #cbd5e1;
+  --border-color: #334155;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--background-dark);
+  color: var(--text-light);
+  overflow: hidden; /* Prevent body overflow */
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: var(--primary-color);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  background-color: #4f46e5;
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  background-color: #3c3f4a;
+  cursor: not-allowed;
+}
+
+input {
+  background-color: var(--background-darker);
+  border: 1px solid var(--border-color);
+  color: var(--text-light);
+  padding: 8px 12px;
+  border-radius: 4px;
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--primary-color);
+}
+
+
+/* Override Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-color);
+}

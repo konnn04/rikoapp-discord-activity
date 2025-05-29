@@ -1,0 +1,15 @@
+.node_modules
+.DS_Store
+.env
+
+client/node_modules
+client/build
+client/.env
+client/.DS_Store
+
+server/node_modules
+server/build
+server/.env
+server/.DS_Store
+server/bin
+package-lock.json
