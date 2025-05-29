@@ -323,7 +323,9 @@ export default class SocketService {
   emitParticipantsUpdate(roomId, participants) {
     console.log(`Emitting participants update for room ${roomId}, count: ${participants.length}`);
     this.io.to(roomId).emit('participantsUpdate', {
-      participants
+      participants,
+      count: participants.length,
+      timestamp: Date.now()
     });
   }
   

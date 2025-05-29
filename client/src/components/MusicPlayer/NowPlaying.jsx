@@ -4,17 +4,12 @@ import Lyrics from './Lyrics'
 import { imageProxy } from '../../services/proxy'
 
 const NowPlaying = () => {
-  const { currentSong, currentPosition } = useMusic()
+  const { currentSong, currentPosition, lyrics } = useMusic()
   const [activeTab, setActiveTab] = useState('thumbnail')
   const [imageError, setImageError] = useState(false)
   
   // Default fallback image
   const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 24 24'%3E%3Cpath fill='%23777' d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
-  
-  // Get safe title and thumbnail
-  const safeTitle = currentSong?.title?.text || currentSong?.title || "Unknown Title";
-  const safeThumbnail = imageError ? fallbackImage : 
-                       (currentSong?.thumbnail ? imageProxy(currentSong.thumbnail) : fallbackImage);
   
   if (!currentSong) {
     return (
@@ -29,6 +24,14 @@ const NowPlaying = () => {
       </div>
     )
   }
+
+  // Get safe title and thumbnail
+  const safeTitle = currentSong?.title?.text || currentSong?.title || "Unknown Title";
+  const safeThumbnail = imageError ? fallbackImage : 
+                       (currentSong?.thumbnail ? imageProxy(currentSong.thumbnail) : fallbackImage);
+  
+  // Check if lyrics tab is active
+  const isLyricsTabActive = activeTab === 'lyrics';
   
   return (
     <div className="now-playing-container">
@@ -43,7 +46,7 @@ const NowPlaying = () => {
             Thumbnail
           </button>
           <button 
-            className={`tab-button ${activeTab === 'lyrics' ? 'active' : ''}`}
+            className={`tab-button ${isLyricsTabActive ? 'active' : ''}`}
             onClick={() => setActiveTab('lyrics')}
           >
             <i className="bi bi-chat-quote"></i>
@@ -77,6 +80,8 @@ const NowPlaying = () => {
             <Lyrics 
               currentSong={currentSong}
               currentPosition={currentPosition}
+              lyrics={lyrics}
+              isVisible={isLyricsTabActive}
             />
           </div>
         )}

@@ -90,23 +90,10 @@ class SocketManager {
    * Handle playback sync events from socket
    */
   handlePlaybackSync(data) {
-    // Avoid processing duplicate events in quick succession
-    const now = Date.now();
-    const lastTime = this.lastEventTimes.playbackSync || 0;
-    
-    if (now - lastTime < 500) {
-      console.log('Skipping duplicate playback sync');
-      return;
-    }
-    
-    this.lastEventTimes.playbackSync = now;
-    console.log('Playback sync received:', data);
-    
-    if (this.handlers.playbackSync) {
-      // Use a small timeout to prevent UI freezing
-      setTimeout(() => {
-        this.handlers.playbackSync(data);
-      }, 0);
+    if (this.playbackSyncHandler) {
+      this.debounce('playbackSync', () => {
+        this.playbackSyncHandler(data);
+      });
     }
   }
   
@@ -114,13 +101,14 @@ class SocketManager {
    * Handle queue update events from socket
    */
   handleQueueUpdate(data) {
-    console.log('Queue update received:', data.queue?.length || 0);
-    
-    if (this.handlers.queueUpdate) {
-      // Debounce queue updates to prevent UI freezing
-      this.debounce('queueUpdate', () => {
-        this.handlers.queueUpdate(data.queue);
-      }, 200);
+    console.log('Queue update received:', data);
+    // Ensure direct calling without debounce to prevent missing updates
+    if (this.queueUpdateHandler) {
+      // Add a timestamp to force UI update
+      if (data && !data.timestamp) {
+        data.timestamp = Date.now();
+      }
+      this.queueUpdateHandler(data);
     }
   }
   
@@ -129,11 +117,13 @@ class SocketManager {
    */
   handleParticipantsUpdate(data) {
     console.log('Participants update received:', data);
-    
-    if (this.handlers.participantsUpdate) {
-      this.debounce('participantsUpdate', () => {
-        this.handlers.participantsUpdate(data.participants);
-      }, 300);
+    if (this.participantsUpdateHandler) {
+      // Add timestamp to force refresh
+      if (data && !data.timestamp) {
+        data.timestamp = Date.now();
+      }
+      // Process immediately without debounce for accurate count
+      this.participantsUpdateHandler(data);
     }
   }
   
@@ -142,6 +132,11 @@ class SocketManager {
    */
   handleTrackChange(data) {
     console.log('Track change received:', data);
+    
+    // If track change includes queue updates, process them
+    if (data.queue && this.handlers.queueUpdate) {
+      this.handlers.queueUpdate(data.queue);
+    }
     
     if (this.handlers.trackChange) {
       setTimeout(() => {
@@ -215,41 +210,37 @@ class SocketManager {
     }
   }
   
-  // Handler setters
+  // Setter methods for handlers
   setPlaybackSyncHandler(handler) {
-    this.handlers.playbackSync = handler;
+    this.playbackSyncHandler = handler;
   }
-  
+
   setQueueUpdateHandler(handler) {
-    this.handlers.queueUpdate = handler;
+    this.queueUpdateHandler = handler;
   }
-  
+
   setParticipantsUpdateHandler(handler) {
-    this.handlers.participantsUpdate = handler;
+    this.participantsUpdateHandler = handler;
   }
-  
+
   setTrackChangeHandler(handler) {
-    this.handlers.trackChange = handler;
+    this.trackChangeHandler = handler;
   }
-  
+
   setPlaybackEndedHandler(handler) {
-    this.handlers.playbackEnded = handler;
+    this.playbackEndedHandler = handler;
   }
-  
+
   setRoomJoinedHandler(handler) {
-    this.handlers.roomJoined = handler;
+    this.roomJoinedHandler = handler;
   }
-  
-  setRoomLeftHandler(handler) {
-    this.handlers.roomLeft = handler;
-  }
-  
+
   setSkipVoteUpdateHandler(handler) {
-    this.handlers.skipVoteUpdate = handler;
+    this.skipVoteUpdateHandler = handler;
   }
-  
+
   setQueueProcessingHandler(handler) {
-    this.handlers.queueProcessing = handler;
+    this.queueProcessingHandler = handler;
   }
 }
 

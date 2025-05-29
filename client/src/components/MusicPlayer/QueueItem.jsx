@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMusic } from '../../context/MusicContext'
 import { byProxy } from '../../services/api'
 
-const QueueItem = ({ song, index, isPlaying, isCurrent, onPlay }) => {
+const QueueItem = ({ song, index, isPlaying, isCurrent, onPlay, onRemove }) => {
   const { participants } = useMusic()
   const [isReordering, setIsReordering] = useState(false)
   
@@ -76,9 +76,17 @@ const QueueItem = ({ song, index, isPlaying, isCurrent, onPlay }) => {
         <div className="song-duration">{formatDuration(song.duration || 0)}</div>
         
         {!isCurrent && (
-          <button className="play-now-btn" onClick={onPlay}>
-            <i className="bi bi-play-fill"></i>
-          </button>
+          <>
+            <button className="play-now-btn" onClick={onPlay} title="Play now">
+              <i className="bi bi-play-fill"></i>
+            </button>
+            
+            {onRemove && (
+              <button className="remove-btn" onClick={onRemove} title="Remove">
+                <i className="bi bi-x"></i>
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

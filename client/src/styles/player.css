@@ -845,6 +845,7 @@
     border-radius: 12px;
     margin-bottom: 24px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    object-fit: cover;
 }
 
 .song-details h2 {
@@ -1033,6 +1034,123 @@
     padding: 24px;
     max-height: 400px;
     overflow-y: auto;
+}
+
+/* Lyrics Styles */
+.lyrics-container {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px 8px;
+}
+
+.lyrics-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.lyrics-header h4 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+  color: var(--text-light);
+}
+
+.lyrics-header p {
+  color: var(--text-secondary);
+  margin: 4px 0;
+  font-size: 0.9rem;
+}
+
+.lyrics-album {
+  font-style: italic;
+  color: var(--text-muted) !important;
+}
+
+.lyrics-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 40px;
+}
+
+.lyric-line {
+  margin: 12px 0;
+  padding: 4px 8px;
+  text-align: center;
+  transition: all 0.3s ease;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.5;
+  border-radius: 8px;
+}
+
+.lyric-line.active {
+  color: var(--text-light);
+  font-weight: 500;
+  font-size: 1.1rem;
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+.no-lyrics {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-gray);
+  text-align: center;
+}
+
+.no-lyrics i {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.suggestion {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.lyrics-container.loading,
+.lyrics-container.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.lyrics-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+  margin-bottom: 16px;
+}
+
+.lyrics-nav {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.lyrics-nav button {
+  background: var(--background-tertiary);
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  margin: 0 8px;
+  cursor: pointer;
+}
+
+.lyrics-nav button:hover {
+  background: var(--primary-color);
+  color: white;
 }
 
 /* Queue Item Styles - Updated for left-to-right layout */
@@ -1317,4 +1435,35 @@
     .now-playing-tabs {
         display: none;
     }
+}
+
+/* ...existing code... */
+
+.remove-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--error-color);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.2rem;
+  color: white;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+.remove-btn:hover {
+  background-color: #dc2626;
+  transform: scale(1.1);
+}
+
+.song-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }

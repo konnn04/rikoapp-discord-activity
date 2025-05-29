@@ -225,13 +225,21 @@ class SocketService {
   // Cải thiện hàm requestSync
   requestSync(roomId) {
     if (this.isSocketConnected() && roomId) {
+      // Ngăn chặn yêu cầu sync quá thường xuyên
+      const now = Date.now();
+      if (now - this.lastSyncTime < 1000) {
+        console.log('Rate limiting sync request, skipping');
+        return; // Giới hạn tốc độ sync để tránh quá tải server
+      }
+      
       console.log('Requesting sync from server for room:', roomId);
       this.socket.emit('requestSync', {
         roomId,
-        clientTime: Date.now(),
+        clientTime: now,
         lastSyncTime: this.lastSyncTime || 0
       });
-      this.lastSyncTime = Date.now();
+      
+      this.lastSyncTime = now;
     } else {
       console.warn('Cannot request sync: socket not connected or missing roomId');
     }

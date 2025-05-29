@@ -1,83 +1,116 @@
 import { useEffect, useState, useRef } from 'react'
+import lyricsService from '../../services/lyricsService'
 
-const Lyrics = ({ currentSong, currentPosition }) => {
-  const [lyrics, setLyrics] = useState([])
+const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
+  const [lyrics, setLyrics] = useState(null)
   const [activeLyricIndex, setActiveLyricIndex] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const lyricsContainerRef = useRef(null)
+  const lastSongIdRef = useRef(null)
   
-  // Fetch lyrics or use from song data
+  // Fetch lyrics when song changes AND component is visible
   useEffect(() => {
-    if (currentSong && currentSong.lyrics) {
-      // If lyrics is a string, parse it into timed lyrics
-      if (typeof currentSong.lyrics === 'string') {
-        // Simple parsing (should be improved for real implementation)
-        const parsedLyrics = currentSong.lyrics
-          .split('\n')
-          .map((line, index) => ({
-            text: line,
-            time: index * 5 // Simple placeholder timing
-          }))
-        setLyrics(parsedLyrics)
-      } else {
-        // If lyrics is already parsed
-        setLyrics(currentSong.lyrics)
+    if (!currentSong || !isVisible || currentSong.id === lastSongIdRef.current) return;
+    
+    async function fetchLyrics() {
+      setLoading(true)
+      setError(null)
+      
+      try {
+        const fetchedLyrics = await lyricsService.getLyrics(currentSong);
+        if (fetchedLyrics) {
+          setLyrics(fetchedLyrics);
+          console.log('Đã tìm thấy lời bài hát', fetchedLyrics);
+        } else {
+          setError('Không tìm thấy lời bài hát');
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải lời bài hát:', err);
+        setError('Lỗi khi tải lời bài hát');
+      } finally {
+        setLoading(false);
+        lastSongIdRef.current = currentSong.id;
       }
-    } else {
-      setLyrics([])
     }
-  }, [currentSong])
+    
+    fetchLyrics();
+  }, [currentSong, isVisible])
   
-  // Update active lyric based on current position
+  // Update active lyric based on current playback position
   useEffect(() => {
-    if (!lyrics.length) return
+    if (!lyrics || !lyrics.lines || lyrics.lines.length === 0) return;
     
-    let activeIndex = 0
+    let activeIndex = 0;
     
-    for (let i = 0; i < lyrics.length; i++) {
-      if (lyrics[i].time <= currentPosition) {
-        activeIndex = i
+    // Find the last line that starts before current position
+    for (let i = 0; i < lyrics.lines.length; i++) {
+      if (lyrics.lines[i].time <= currentPosition) {
+        activeIndex = i;
       } else {
-        break
+        break;
       }
     }
     
     if (activeIndex !== activeLyricIndex) {
-      setActiveLyricIndex(activeIndex)
+      setActiveLyricIndex(activeIndex);
       
-      // Scroll the active lyric into view
-      const container = lyricsContainerRef.current
+      // Scroll active lyric into view with smooth scrolling
+      const container = lyricsContainerRef.current;
       if (container) {
-        const activeElement = container.querySelector(`.lyric-line-${activeIndex}`)
+        const activeElement = container.querySelector(`.lyric-line-${activeIndex}`);
         if (activeElement) {
           activeElement.scrollIntoView({
             behavior: 'smooth',
             block: 'center'
-          })
+          });
         }
       }
     }
   }, [currentPosition, lyrics, activeLyricIndex])
   
-  if (!lyrics.length) {
+  if (loading) {
     return (
-      <div className="lyrics-container">
-        <p className="no-lyrics">No lyrics available</p>
+      <div className="lyrics-container loading">
+        <div className="lyrics-spinner"></div>
+        <p>Đang tìm lời bài hát...</p>
       </div>
-    )
+    );
+  }
+  
+  if (error || !lyrics) {
+    return (
+      <div className="lyrics-container error">
+        <p className="no-lyrics">
+          <i className="bi bi-music-note-list"></i>
+          {error || 'Không tìm thấy lời bài hát'}
+        </p>
+        <p className="suggestion">
+          Thử tìm kiếm: "{currentSong?.title?.text || currentSong?.title || 'Unknown'}"
+        </p>
+      </div>
+    );
   }
   
   return (
-    <div className="lyrics-overlay" ref={lyricsContainerRef}>
-      {lyrics.map((line, index) => (
-        <div 
-          key={index} 
-          className={`lyric-line lyric-line-${index} ${index === activeLyricIndex ? 'active' : ''}`}
-        >
-          {line.text}
-        </div>
-      ))}
+    <div className="lyrics-container" ref={lyricsContainerRef}>
+      <div className="lyrics-header">
+        <h4>{lyrics.title}</h4>
+        <p>{lyrics.artist}</p>
+        {lyrics.album && <p className="lyrics-album">{lyrics.album}</p>}
+      </div>
+      <div className="lyrics-content">
+        {lyrics.lines.map((line, index) => (
+          <div 
+            key={index} 
+            className={`lyric-line lyric-line-${index} ${index === activeLyricIndex ? 'active' : ''}`}
+          >
+            {line.text || " "}
+          </div>
+        ))}
+      </div>
     </div>
-  )
+  );
 }
 
 export default Lyrics

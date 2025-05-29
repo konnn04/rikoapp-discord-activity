@@ -55,55 +55,94 @@ export const audioProxy = (url) => {
     }
 };
 
-// Specialized function for images with better error handling
+/**
+ * Generate a proxied URL for images
+ * @param {string} url - The original image URL
+ * @returns {string} - The proxied image URL
+ */
 export const imageProxy = (url) => {
-    if (!url) return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"%3E%3Cpath fill="%23aaa" d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 16H5V5h14v14zm-5-7l-3 4h-4l3-4-2-3h4l2 3z"/%3E%3C/svg%3E';
-    
-    if (url.startsWith('data:')) return url;
-    
-    try {
-        const proxyUrl = new URL('/.proxy/api/proxy/img', window.location.origin);
-        proxyUrl.searchParams.set('url', encodeURIComponent(url));
-        return proxyUrl.toString();
-    } catch (error) {
-        console.error('Invalid URL in imageProxy function:', url);
-        return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"%3E%3Cpath fill="%23aaa" d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 16H5V5h14v14zm-5-7l-3 4h-4l3-4-2-3h4l2 3z"/%3E%3C/svg%3E';
-    }
+  if (!url) {
+    return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"%3E%3Cpath fill="%23777" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"%3E%3C/path%3E%3C/svg%3E';
+  }
+  
+  if (url.startsWith('data:') || url.includes('/.proxy/')) {
+    return url;
+  }
+  
+  try {
+    // Make sure URL is valid
+    new URL(url);
+    return `/.proxy/api/proxy/img?url=${encodeURIComponent(url)}`;
+  } catch (error) {
+    console.error('Invalid URL for proxy:', url);
+    return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"%3E%3Cpath fill="%23777" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"%3E%3C/path%3E%3C/svg%3E';
+  }
 };
 
-// General function for determining the right proxy to use
-export const byProxy = (url) => {
-    if (!url || url === 'undefined') {
-        return '';
-    }
+/**
+ * Generate a proxied URL for media files (audio, video)
+ * @param {string} url - The original media URL 
+ * @returns {string} - The proxied media URL
+ */
+export const mediaProxy = (url) => {
+  if (!url) return '';
   
-    // If URL is already a proxy or is a data URI, return as is
-    if (url.startsWith('data:') || url.includes('/.proxy/api/proxy')) {
-        return url;
-    }
+  if (url.startsWith('data:') || url.includes('/.proxy/')) {
+    return url;
+  }
+  
+  try {
+    new URL(url);
+    return `/.proxy/api/proxy/media?url=${encodeURIComponent(url)}`;
+  } catch (error) {
+    console.error('Invalid URL for media proxy:', url);
+    return '';
+  }
+};
 
-    // If URL is relative, return as is
-    if (!url.startsWith('http')) {
-        return url;
+/**
+ * Generate a proxy URL for any resource type
+ */
+export const proxy = (url) => {
+  if (!url) return '';
+  
+  if (url.startsWith('data:') || url.includes('/.proxy/')) {
+    return url;
+  }
+  
+  try {
+    // Check file extension to determine type
+    new URL(url);
+    if (url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i)) {
+      return imageProxy(url);
+    } else if (url.match(/\.(mp3|wav|mp4|webm|ogg|m4a|flac)$/i)) {
+      return mediaProxy(url);
+    } else {
+      return `/.proxy/api/proxy?url=${encodeURIComponent(url)}`;
     }
+  } catch (error) {
+    console.error('Invalid URL for proxy:', url);
+    return '';
+  }
+};
 
-    // For audio streams, use the audio-optimized proxy
-    if (url.includes('.mp3') || 
-        url.includes('.m4a') || 
-        url.includes('/audioplayback/') || 
-        url.includes('googlevideo.com')) {
-        return audioProxy(url);
+// Add function to detect content type from URL
+export const detectContentType = (url) => {
+  if (!url) return 'unknown';
+  
+  try {
+    if (url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i)) {
+      return 'image';
+    } else if (url.match(/\.(mp3|wav|ogg|flac|m4a)$/i)) {
+      return 'audio';
+    } else if (url.match(/\.(mp4|webm|mkv|avi|mov)$/i)) {
+      return 'video';
+    } else {
+      return 'unknown';
     }
-
-    // For images, use the image-optimized proxy
-    if (url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i) || 
-        url.includes('i.ytimg.com') || 
-        url.includes('discordapp.com/')) {
-        return imageProxy(url);
-    }
-
-    // For other resources, use the general proxy
-    return proxy(url);
+  } catch (error) {
+    return 'unknown';
+  }
 };
 
 export default proxy;

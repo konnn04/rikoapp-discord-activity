@@ -74,8 +74,6 @@ class Room {
       this.autoNextTimer = null;
     }
     
-    if (this.queue.length === 0) return false;
-    
     // Store the current song in history if it exists
     if (this.currentSong) {
       this.playbackHistory.unshift(this.currentSong);
@@ -83,6 +81,31 @@ class Room {
       if (this.playbackHistory.length > 20) {
         this.playbackHistory.pop();
       }
+    }
+    
+    // Per business requirements: if queue is empty and we're skipping,
+    // clear the current song and return to empty state
+    if (this.queue.length === 0) {
+      // Clear current song and stop playback
+      const previousSong = this.currentSong;
+      this.currentSong = null;
+      this.isPlaying = false;
+      this.startTimestamp = null;
+      this.pauseTimestamp = null;
+      this.currentPosition = 0;
+      this.accumulatedTime = 0;
+      this.lastCommandTime = Date.now();
+      
+      // Clear all skip votes
+      this.skipVotes.clear();
+      
+      // Emit playback ended event if socket is provided
+      if (io && io.socketService && previousSong) {
+        io.socketService.emitPlaybackEnded(this.id, null);
+        io.socketService.emitPlaybackSync(this.id, this);
+      }
+      
+      return false;
     }
     
     // Get the next song from queue
@@ -372,7 +395,7 @@ class Room {
     if (this.currentSong && this.isPlaying) {
       const currentTime = this.getCurrentPlaybackTime();
       
-      // Đảm bảo bài hát có thông tin về độ dài
+      // Ensure the song has duration information
       if (!this.currentSong.duration) {
         console.warn(`Song ${this.currentSong.id} has no duration, cannot set auto-next timer`);
         return;
@@ -384,6 +407,33 @@ class Room {
       
       this.autoNextTimer = setTimeout(() => {
         const prevSong = this.currentSong;
+        
+        // If no songs in queue, clear current song per business requirements
+        if (this.queue.length === 0) {
+          // Add to history before clearing
+          if (prevSong) {
+            this.playbackHistory.unshift(prevSong);
+            if (this.playbackHistory.length > 20) {
+              this.playbackHistory.pop();
+            }
+          }
+          
+          // Clear current song and stop playback
+          this.currentSong = null;
+          this.isPlaying = false;
+          this.currentPosition = 0;
+          
+          console.log(`No more songs in queue for room ${this.id}, clearing current song`);
+          
+          // Emit playback ended event
+          const socketService = io.socketService;
+          socketService.emitPlaybackEnded(this.id, null);
+          socketService.emitPlaybackSync(this.id, this);
+          
+          return;
+        }
+        
+        // Otherwise play next song
         const hasNext = this.playNext();
         
         if (hasNext) {
@@ -398,13 +448,6 @@ class Room {
             automatic: true,
             timerTriggered: true
           });
-        } else {
-          console.log(`No more songs in queue for room ${this.id}`);
-          // Mark playback as ended - no more songs
-          this.isPlaying = false;
-          
-          const socketService = io.socketService;
-          socketService.emitPlaybackEnded(this.id);
         }
       }, remainingTime + 500); // Add 500ms buffer
     }

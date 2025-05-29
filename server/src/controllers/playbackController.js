@@ -1,5 +1,4 @@
 import { getRoomRegistry } from '../services/roomRegistry.js';
-import { getYTDLPManager } from '../services/ytdlpService.js';
 
 /**
  * Skip current song - with voting system
@@ -48,48 +47,32 @@ export const togglePlayback = async (req, res) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Check if user is in the room
-    const userInRoom = room.participants.some(p => p.id === userId);
-    if (!userInRoom) {
-      return res.status(403).json({ message: 'You are not in this room' });
+    // Toggle playback state
+    const result = room.togglePlayback();
+    
+    if (!result) {
+      return res.status(400).json({ message: 'Cannot toggle playback, no song is playing' });
     }
 
-    // Toggle playback and get the new state
-    const toggled = room.togglePlayback();
-
-    if (!toggled) {
-      return res.status(400).json({ message: 'No song is currently playing' });
-    }
-
-    // Emit playback update to all room members with enhanced sync data
+    // Get the socket.io instance
     const io = req.app.get('io');
-    if (io && io.socketService) {
-      // Use the enhanced socket service for more accurate sync
-      io.socketService.emitPlaybackSync(roomId, room, {
-        action: room.isPlaying ? 'play' : 'pause',
-        triggeredBy: userId,
-        timestamp: Date.now()
-      });
-      
-      // Log the sync event
-      console.log(`[PlaybackSync] ${room.isPlaying ? 'Play' : 'Pause'} triggered by ${userId} in room ${roomId}`);
-    } else {
-      // Fallback to basic emit if socket service is not available
-      io.to(roomId).emit('playbackSync', {
-        currentSong: room.currentSong,
-        isPlaying: room.isPlaying,
-        currentPosition: room.getCurrentPlaybackTime(),
-        streamUrl: room.currentSong?.streamUrl,
-        startTimestamp: room.startTimestamp,
-        serverTime: Date.now(),
-        action: room.isPlaying ? 'play' : 'pause'
-      });
+    if (!io) {
+      return res.status(500).json({ message: 'Socket.io instance not available' });
     }
+
+    // Emit playback sync event with appropriate action flag
+    const action = room.isPlaying ? 'play' : 'pause';
+    const exactPosition = room.getCurrentPlaybackTime();
+
+    io.socketService.emitPlaybackSync(roomId, room, { 
+      action,
+      exactPosition
+    });
 
     return res.json({
+      message: `Playback ${room.isPlaying ? 'started' : 'paused'}`,
       isPlaying: room.isPlaying,
-      currentPosition: room.getCurrentPlaybackTime(),
-      serverTime: Date.now()
+      currentPosition: exactPosition
     });
   } catch (error) {
     console.error('Error toggling playback:', error);
@@ -311,25 +294,67 @@ export const playNext = async (req, res) => {
 
     // Play next song
     const previousSong = room.currentSong;
-    const played = room.playNext(req.app.get('io'));
-
-    if (!played) {
-      return res.status(400).json({ message: 'No more songs in queue' });
+    let played = false;
+    
+    if (room.queue.length > 0) {
+      // If there are songs in queue, play next one
+      played = room.playNext(req.app.get('io'));
+      
+      // Ensure we have a stream URL for the new song
+      if (played && room.currentSong) {
+        await ensureStreamUrl(room);
+      }
+    } else if (room.currentSong) {
+      // Per business requirements: if queue is empty but there's a current song,
+      // clear everything and return to empty state
+      if (previousSong) {
+        // Store the cleared song in history
+        room.playbackHistory.unshift(previousSong);
+        if (room.playbackHistory.length > 20) {
+          room.playbackHistory.pop();
+        }
+      }
+      
+      room.currentSong = null;
+      room.isPlaying = false;
+      room.currentPosition = 0;
+      room.accumulatedTime = 0;
+      room.startTimestamp = null;
+      room.pauseTimestamp = null;
+      
+      played = true; // Consider this a successful operation
+    } else {
+      // Nothing to do, already empty
+      played = false;
     }
 
     // Emit playback update to all room members
     const io = req.app.get('io');
-    io.socketService.emitPlaybackSync(roomId, room);
-    
-    // Emit track change notification
-    io.socketService.emitTrackChange(roomId, previousSong?.id, room.currentSong?.id, {
-      skippedBy: userId
-    });
+    if (io && io.socketService) {
+      io.socketService.emitPlaybackSync(roomId, room);
+      
+      if (previousSong && !room.currentSong) {
+        // Emit playback ended event if we cleared the current song
+        io.socketService.emitPlaybackEnded(roomId, null);
+      }
+      else if (previousSong) {
+        // Emit track change notification
+        io.socketService.emitTrackChange(roomId, previousSong?.id, room.currentSong?.id, {
+          skippedBy: userId,
+          queue: room.queue // Include updated queue in the event
+        });
+      }
+      
+      // Emit separate queue update to ensure all clients have the latest queue
+      io.socketService.emitQueueUpdate(roomId, room.queue);
+    }
 
     return res.json({
       currentSong: room.currentSong,
       isPlaying: room.isPlaying,
-      currentPosition: room.getCurrentPlaybackTime()
+      currentPosition: room.getCurrentPlaybackTime(),
+      queue: room.queue,
+      serverTime: Date.now()
     });
   } catch (error) {
     console.error('Error playing next song:', error);

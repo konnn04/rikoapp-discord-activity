@@ -7,7 +7,6 @@ const Controls = () => {
     isPlaying,
     togglePlayback,
     playNext,
-    playPrevious,
     audioRef,
     queue,
     syncFromServer,
@@ -16,9 +15,6 @@ const Controls = () => {
   
   const [hasPlaybackIssue, setHasPlaybackIssue] = useState(false)
   const [lastErrorTime, setLastErrorTime] = useState(0)
-  
-  // Check if there are next songs available
-  const hasNextSong = queue && queue.length > 0
   
   // Monitor audio element for issues
   useEffect(() => {
@@ -57,57 +53,29 @@ const Controls = () => {
         audioRef.current.load()
       }
       
-      // Clear any errors
-      if (audioRef.current.error) {
-        // Try to reset by recreating the source
-        const src = audioRef.current.src
-        audioRef.current.src = ""
-        
-        setTimeout(() => {
-          if (audioRef.current) {
-            audioRef.current.src = src + `&_retry=${Date.now()}`
-            audioRef.current.load()
-            
-            // Play with error handling
-            audioRef.current.play()
-              .then(() => {
-                console.log('Forced playback started')
-                setHasPlaybackIssue(false)
-              })
-              .catch(err => {
-                console.error('Force play failed:', err)
-                // If we still can't play, try a full sync
-                syncFromServer()
-              })
-          }
-        }, 300)
-      } else {
-        // Play with error handling
-        audioRef.current.play()
-          .then(() => {
-            console.log('Forced playback started')
-            setHasPlaybackIssue(false)
-          })
-          .catch(err => {
-            console.error('Force play failed:', err)
-            // If we still can't play, try a full sync
-            syncFromServer()
-          })
-      }
+      // Try to play with error handling
+      audioRef.current.play()
+        .then(() => {
+          console.log('Forced playback started')
+          setHasPlaybackIssue(false)
+        })
+        .catch(err => {
+          console.error('Force play failed:', err)
+          // If we still can't play, try a full sync
+          syncFromServer()
+        })
     }
   }
   
+  // Check if there are next songs available or if there's a current song to clear
+  // Nút Next có thể dùng để: 
+  // 1. Chuyển sang bài kế tiếp trong hàng đợi
+  // 2. Hoặc xóa bài hiện tại nếu không có bài nào trong hàng đợi
+  const canSkipOrClear = queue.length > 0 || currentSong;
+  
   return (
     <div className="playback-controls">
-      <button
-        className="control-button prev-button"
-        onClick={playPrevious}
-        disabled={!currentSong}
-      >
-        <svg viewBox="0 0 24 24">
-          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"></path>
-        </svg>
-      </button>
+      {/* Removed previous button as per requirements */}
       
       <button 
         className="control-button play-button"
@@ -128,7 +96,8 @@ const Controls = () => {
       <button
         className="control-button next-button"
         onClick={playNext}
-        disabled={!hasNextSong}
+        disabled={!canSkipOrClear}
+        title={queue.length > 0 ? "Play next song" : (currentSong ? "Clear current song" : "No songs available")}
       >
         <svg viewBox="0 0 24 24">
           <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"></path>

@@ -103,16 +103,19 @@ export const leaveRoom = async (req, res) => {
     
     // Emit participant update to all room members
     const io = req.app.get('io');
-    io.to(roomId).emit('participantsUpdate', {
-      participants: room.participants
-    });
+    if (io && io.socketService) {
+      io.socketService.emitParticipantsUpdate(roomId, room.participants);
+    }
     
     // If room is empty, delete it
     if (remainingParticipants === 0) {
       roomRegistry.delete(roomId);
     }
     
-    return res.json({ message: 'Successfully left room' });
+    return res.json({ 
+      message: 'Successfully left room',
+      remainingParticipants: remainingParticipants
+    });
   } catch (error) {
     console.error('Error leaving room:', error);
     return res.status(500).json({ message: 'Server error' });
