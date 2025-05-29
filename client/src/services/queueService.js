@@ -27,14 +27,19 @@ class QueueService {
       return false;
     }
     
-    this.queue = [...newQueue];
-    this.lastQueueUpdateTime = Date.now();
+    const hasChanged = JSON.stringify(this.queue) !== JSON.stringify(newQueue);
     
-    if (this.onQueueUpdateCallback) {
-      this.onQueueUpdateCallback(this.queue);
+    if (hasChanged) {
+      console.log('[QueueService] Queue updated with', newQueue.length, 'items');
+      this.queue = [...newQueue];
+      this.lastQueueUpdateTime = Date.now();
+      
+      if (this.onQueueUpdateCallback) {
+        this.onQueueUpdateCallback(this.queue);
+      }
     }
     
-    return true;
+    return hasChanged;
   }
 
   /**

@@ -31,6 +31,19 @@ const Controls = () => {
       } else {
         setHasPlaybackIssue(false)
       }
+      
+      // Check if track has ended but we failed to auto-advance
+      if (currentSong && audio && audio.ended && 
+          now - lastErrorTime > 5000 && // Don't trigger right after another error
+          !queue.length) { // Only handle when queue is empty (otherwise let normal flow work)
+        console.log('Controls detected track ended but no auto-advance occurred');
+        // Try to force play next if we have next songs
+        if (playNext && !isSyncing) {
+          setLastErrorTime(now);
+          console.log('Controls forcing next track due to ended track with no auto-advance');
+          playNext();
+        }
+      }
     }
     
     // Check playback status periodically
@@ -38,7 +51,7 @@ const Controls = () => {
     
     // Clear interval on cleanup
     return () => clearInterval(interval)
-  }, [currentSong, isPlaying, lastErrorTime, audioRef])
+  }, [currentSong, isPlaying, lastErrorTime, audioRef, playNext, queue.length, isSyncing])
   
   // Function to force playback when needed
   const forcePlay = () => {

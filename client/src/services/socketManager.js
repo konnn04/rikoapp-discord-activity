@@ -90,9 +90,9 @@ class SocketManager {
    * Handle playback sync events from socket
    */
   handlePlaybackSync(data) {
-    if (this.playbackSyncHandler) {
+    if (this.handlers.playbackSync) {
       this.debounce('playbackSync', () => {
-        this.playbackSyncHandler(data);
+        this.handlers.playbackSync(data);
       });
     }
   }
@@ -103,12 +103,12 @@ class SocketManager {
   handleQueueUpdate(data) {
     console.log('Queue update received:', data);
     // Ensure direct calling without debounce to prevent missing updates
-    if (this.queueUpdateHandler) {
+    if (this.handlers.queueUpdate) {
       // Add a timestamp to force UI update
       if (data && !data.timestamp) {
         data.timestamp = Date.now();
       }
-      this.queueUpdateHandler(data);
+      this.handlers.queueUpdate(data);
     }
   }
   
@@ -117,13 +117,13 @@ class SocketManager {
    */
   handleParticipantsUpdate(data) {
     console.log('Participants update received:', data);
-    if (this.participantsUpdateHandler) {
+    if (this.handlers.participantsUpdate) {
       // Add timestamp to force refresh
       if (data && !data.timestamp) {
         data.timestamp = Date.now();
       }
       // Process immediately without debounce for accurate count
-      this.participantsUpdateHandler(data);
+      this.handlers.participantsUpdate(data);
     }
   }
   
@@ -135,13 +135,24 @@ class SocketManager {
     
     // If track change includes queue updates, process them
     if (data.queue && this.handlers.queueUpdate) {
-      this.handlers.queueUpdate(data.queue);
+      this.handlers.queueUpdate({ queue: data.queue, source: 'trackChange' });
     }
     
     if (this.handlers.trackChange) {
+      // Process track change immediately to prevent delays in playback
+      this.handlers.trackChange(data);
+    }
+    
+    // When a track changes due to auto-advance (track ended), ensure we also trigger sync
+    if (data.automatic && data.clientReported) {
+      // Add small delay before requesting sync to allow the server to fully process
       setTimeout(() => {
-        this.handlers.trackChange(data);
-      }, 0);
+        if (this.handlers.playbackSync) {
+          console.log('Auto-requesting sync after automatic track change');
+          // Signal that we need a fresh sync after track change
+          this.handlers.playbackSync({ needsSync: true, reason: 'automaticChange' });
+        }
+      }, 500);
     }
   }
   
@@ -212,35 +223,35 @@ class SocketManager {
   
   // Setter methods for handlers
   setPlaybackSyncHandler(handler) {
-    this.playbackSyncHandler = handler;
+    this.handlers.playbackSync = handler;
   }
 
   setQueueUpdateHandler(handler) {
-    this.queueUpdateHandler = handler;
+    this.handlers.queueUpdate = handler;
   }
 
   setParticipantsUpdateHandler(handler) {
-    this.participantsUpdateHandler = handler;
+    this.handlers.participantsUpdate = handler;
   }
 
   setTrackChangeHandler(handler) {
-    this.trackChangeHandler = handler;
+    this.handlers.trackChange = handler;
   }
 
   setPlaybackEndedHandler(handler) {
-    this.playbackEndedHandler = handler;
+    this.handlers.playbackEnded = handler;
   }
 
   setRoomJoinedHandler(handler) {
-    this.roomJoinedHandler = handler;
+    this.handlers.roomJoined = handler;
   }
 
   setSkipVoteUpdateHandler(handler) {
-    this.skipVoteUpdateHandler = handler;
+    this.handlers.skipVoteUpdate = handler;
   }
 
   setQueueProcessingHandler(handler) {
-    this.queueProcessingHandler = handler;
+    this.handlers.queueProcessing = handler;
   }
 }
 

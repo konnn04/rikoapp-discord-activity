@@ -1,206 +1,215 @@
-import fetch from 'node-fetch';
-import NodeCache from 'node-cache';
+import axios from 'axios';
 
 class LyricsService {
   constructor() {
-    // Cache lyrics with 7-day TTL
-    this.cache = new NodeCache({ stdTTL: 7 * 24 * 60 * 60, checkperiod: 24 * 60 * 60 });
+    this.apiBaseUrl = process.env.LYRICS_API_URL || 'https://lrclib.net/api';
+    this.cache = new Map();
+    this.cacheExpiry = 24 * 60 * 60 * 1000; // 24 hours in ms
+    this.maxRetries = 2;
   }
 
   /**
-   * Get lyrics for a song from cache or lrclib.net API
-   * @param {Object} song - Song information object
-   * @returns {Promise<Object>} - Lyrics data or null if not found
+   * Get lyrics for a song
+   * @param {Object} params - Parameters including artist and title
+   * @returns {Promise<Object|null>} - Lyrics object or null if not found
    */
-  async getLyrics(song) {
-    if (!song) return null;
+  async getLyrics({ artist, title }) {
+    if (!artist || !title) {
+      throw new Error('Artist and title are required to fetch lyrics');
+    }
 
+    // Filter artist name to remove "-topic" or "official" suffixes
+    const filteredArtist = this.filterArtistName(artist);
+
+    // Check cache first
+    const cacheKey = `${filteredArtist}:${title}`.toLowerCase();
+    if (this.cache.has(cacheKey)) {
+      const cacheEntry = this.cache.get(cacheKey);
+      const now = Date.now();
+      
+      // Return from cache if not expired
+      if (now - cacheEntry.timestamp < this.cacheExpiry) {
+        console.log(`[LyricsService] Cache hit for "${filteredArtist} - ${title}"`);
+        return cacheEntry.data;
+      } else {
+        // Remove expired entry
+        this.cache.delete(cacheKey);
+      }
+    }
+
+    return this.fetchWithRetry(filteredArtist, title);
+  }
+
+  /**
+   * Filter artist name to remove common suffixes like "-topic" or "official"
+   */
+  filterArtistName(artist) {
+    if (!artist) return '';
+    
+    // Remove "-topic" suffix
+    let filtered = artist.replace(/\s*-\s*topic$/i, '');
+    
+    // Remove "official" suffix
+    filtered = filtered.replace(/\s*official$/i, '');
+    
+    return filtered.trim();
+  }
+
+  /**
+   * Fetch lyrics with retry logic
+   */
+  async fetchWithRetry(artist, title, attempt = 0) {
     try {
-      // Extract information
-      const artistName = this.extractArtistName(song);
-      const trackName = this.extractTrackName(song);
+      console.log(`[LyricsService] Fetching lyrics for "${artist} - ${title}" (attempt ${attempt + 1})`);
       
-      if (!artistName || !trackName) {
-        console.log('Insufficient information to search for lyrics');
-        return null;
-      }
-
-      // Create cache key
-      const cacheKey = `lyrics_${artistName.toLowerCase()}_${trackName.toLowerCase()}`;
+      // Encode URI components to handle special characters
+      const encodedArtist = encodeURIComponent(artist);
+      const encodedTitle = encodeURIComponent(title);
       
-      // Check if we have it in cache
-      const cachedLyrics = this.cache.get(cacheKey);
-      if (cachedLyrics) {
-        console.log(`Serving cached lyrics for: ${artistName} - ${trackName}`);
-        return cachedLyrics;
-      }
-
-      // Create URL with required parameters
-      const params = new URLSearchParams({
-        artist_name: artistName,
-        track_name: trackName
+      // Using the correct API endpoint format
+      const response = await axios.get(`${this.apiBaseUrl}/get?artist_name=${encodedArtist}&track_name=${encodedTitle}`, {
+        timeout: 5000, // 5 second timeout
+        headers: {
+          'User-Agent': 'LyricsService/1.0'
+        }
       });
 
-      const url = `https://lrclib.net/api/get?${params.toString()}`;
-      
-      console.log(`Searching for lyrics: ${artistName} - ${trackName}`);
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      // Check if we have lyrics data - properly handle the API response
+      if (response.status === 200 && response.data) {
+        // Process the response according to the API format
+        const data = response.data;
+        
+        // Create a standardized lyrics object with the available data
+        const lyricsObj = {
+          id: data.id,
+          title: data.trackName || title,
+          artist: data.artistName || artist,
+          album: data.albumName || '',
+          plainLyrics: data.plainLyrics || null,
+          syncedLyrics: data.syncedLyrics || null,
+          duration: data.duration || 0,
+          instrumental: data.instrumental || false,
+          // Ensure there's always a lines array
+          lines: this.parseLyrics(data)
+        };
+
+        // Cache the result
+        this.cache.set(`${artist}:${title}`.toLowerCase(), {
+          data: lyricsObj,
+          timestamp: Date.now()
+        });
+
+        return lyricsObj;
       }
       
-      const data = await response.json();
+      return null;
+    } catch (error) {
+      // Create a structured error object for better handling
+      const errorInfo = {
+        status: error.response?.status || 500,
+        message: error.message || 'Unknown error',
+        code: error.code || 'ERR_UNKNOWN'
+      };
       
-      // If no data found, return null
-      if (!data || (!data.syncedLyrics && !data.plainLyrics)) {
-        console.log(`No lyrics found for: ${artistName} - ${trackName}`);
+      console.error(`[LyricsService] Error fetching lyrics (attempt ${attempt + 1}):`, 
+        errorInfo.status, errorInfo.message);
+      
+      // Don't retry on 404 errors - lyrics just don't exist
+      if (error.response?.status === 404) {
+        console.log(`[LyricsService] Lyrics not found for "${artist} - ${title}", returning null`);
         return null;
       }
       
-      // Process lyrics into standard format
-      const processedLyrics = this.processLyrics(data, artistName, trackName);
-      
-      // Only cache if lyrics were found
-      if (processedLyrics && (processedLyrics.lines.length > 0)) {
-        this.cache.set(cacheKey, processedLyrics);
+      // Try alternative service if we failed with the primary one
+      if (attempt === 0) {
+        try {
+          // Try an alternative lyrics source
+          const backupUrl = `https://api.lyrics.app/v1/lyrics/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`;
+          const response = await axios.get(backupUrl, { timeout: 5000 });
+          
+          if (response.status === 200 && response.data?.lyrics) {
+            // Format the backup response to match our standard structure
+            const plainLyrics = response.data.lyrics;
+            return {
+              title: title,
+              artist: artist,
+              plainLyrics: plainLyrics,
+              syncedLyrics: null,
+              // Add a basic lines array with the lyrics split by newlines
+              lines: plainLyrics.split('\n').map((text, index) => ({
+                time: index * 5000, // Add estimated timestamps
+                text: text.trim()
+              }))
+            };
+          }
+        } catch (backupError) {
+          console.error('[LyricsService] Backup lyrics source failed:', 
+            backupError.response?.status || backupError.message);
+        }
       }
       
-      return processedLyrics;
-    } catch (error) {
-      console.error('Error fetching lyrics:', error);
+      // Retry if we haven't reached max retries
+      if (attempt < this.maxRetries) {
+        const delay = 1000 * Math.pow(2, attempt); // Exponential backoff: 1s, 2s, 4s...
+        console.log(`[LyricsService] Retrying in ${delay}ms...`);
+        
+        return new Promise(resolve => {
+          setTimeout(() => {
+            resolve(this.fetchWithRetry(artist, title, attempt + 1));
+          }, delay);
+        });
+      }
+      
+      // All retries failed
       return null;
     }
   }
-  
+
   /**
-   * Extract artist name from song information
+   * Parse lyrics from API response into structured format
+   * @param {Object} data - API response data
+   * @returns {Array} Array of lyric lines with time and text
    */
-  extractArtistName(song) {
-    // Try different fields in priority order
-    let artist = song.artist || 
-           song.artistName || 
-           song.channel || 
-           song.channelName ||
-           song.author ||
-           'Unknown Artist';
-    
-    // Remove " - Topic" from artist name to improve search success
-    artist = artist.replace(/\s+-\s+Topic$/, '')
-                  .replace(/\s+Topic$/, '')
-                  .replace(/\s+-\s+Official$/, '')
-                  .replace(/\s+Official$/, '');
-    
-    return artist;
-  }
-  
-  /**
-   * Extract track name from song information
-   */
-  extractTrackName(song) {
-    // Try different fields in priority order
-    let title = song.title?.text || song.title || song.name || '';
-    
-    // Remove extra information typically found in YouTube video titles
-    title = title
-      .replace(/\(Official Video\)/i, '')
-      .replace(/\(Official Audio\)/i, '')
-      .replace(/\(Official Music Video\)/i, '')
-      .replace(/\(Lyrics\)/i, '')
-      .replace(/\(Lyric Video\)/i, '')
-      .replace(/\[.*?\]/g, '')
-      .replace(/\(.*?\)/g, '')
-      .replace(/Official Video/i, '')
-      .replace(/Official Audio/i, '')
-      .replace(/Official Music Video/i, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-      
-    return title;
-  }
-  
-  /**
-   * Process lyrics data into standard format
-   */
-  processLyrics(data, artistName, trackName) {
-    // Use synced lyrics if available, otherwise use plain lyrics
+  parseLyrics(data) {
+    // If we have synced lyrics, parse them if they exist
     if (data.syncedLyrics) {
-      return {
-        id: data.id,
-        artist: data.artistName || artistName,
-        title: data.trackName || trackName,
-        album: data.albumName,
-        duration: data.duration,
-        lines: this.parseSyncedLyrics(data.syncedLyrics),
-        plainText: data.plainLyrics,
-        synced: true
-      };
-    } else if (data.plainLyrics) {
-      return {
-        id: data.id,
-        artist: data.artistName || artistName,
-        title: data.trackName || trackName,
-        album: data.albumName,
-        duration: data.duration,
-        lines: this.parsePlainLyrics(data.plainLyrics),
-        plainText: data.plainLyrics,
-        synced: false
-      };
+      try {
+        // Try to parse LRC format or other synced formats
+        const lines = data.syncedLyrics
+          .split('\n')
+          .filter(line => line.trim())
+          .map(line => {
+            // Basic LRC format parser: [mm:ss.xx]Text
+            const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+            if (match) {
+              const minutes = parseInt(match[1]);
+              const seconds = parseFloat(match[2]);
+              const text = match[3].trim();
+              const time = (minutes * 60 + seconds) * 1000; // Convert to ms
+              return { time, text };
+            }
+            return null;
+          })
+          .filter(line => line !== null);
+          
+        if (lines.length > 0) return lines;
+      } catch (e) {
+        console.error('[LyricsService] Error parsing synced lyrics:', e);
+      }
     }
     
-    return null;
-  }
-  
-  /**
-   * Parse synced lyrics into array of lines with timestamps
-   */
-  parseSyncedLyrics(syncedLyrics) {
-    if (!syncedLyrics) return [];
+    // Fallback to plain lyrics if synced parsing failed or doesn't exist
+    if (data.plainLyrics) {
+      return data.plainLyrics
+        .split('\n')
+        .map((text, index) => ({ 
+          time: index * 5000, // Add estimated timestamps (5 sec per line)
+          text: text.trim() || " " 
+        }));
+    }
     
-    return syncedLyrics
-      .split('\n')
-      .map(line => {
-        // Format: [mm:ss.xx] text
-        const match = line.match(/\[(\d{2}):(\d{2})\.(\d{2})\](.*)/);
-        if (match) {
-          const minutes = parseInt(match[1], 10);
-          const seconds = parseInt(match[2], 10);
-          const hundredths = parseInt(match[3], 10);
-          const text = match[4].trim();
-          
-          // Calculate total time in seconds
-          const time = minutes * 60 + seconds + hundredths / 100;
-          
-          return { time, text };
-        }
-        
-        // If not matching the format, return line without timestamp
-        return { time: 0, text: line.trim() };
-      })
-      .filter(line => line.text); // Filter out empty lines
-  }
-  
-  /**
-   * Parse plain lyrics into array of lines
-   * Distribute timestamps evenly across lines
-   */
-  parsePlainLyrics(plainLyrics) {
-    if (!plainLyrics) return [];
-    
-    const lines = plainLyrics
-      .split('\n')
-      .filter(line => line.trim());
-    
-    // Distribute time evenly across lines
-    // Assume song is 3 minutes (180 seconds) if duration not known
-    const estimatedDuration = 180;
-    const timePerLine = estimatedDuration / lines.length;
-    
-    return lines.map((text, index) => ({
-      time: index * timePerLine,
-      text: text.trim()
-    }));
+    // Return empty array if no lyrics available
+    return [];
   }
 }
 

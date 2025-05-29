@@ -41,8 +41,13 @@ export const MusicContextProvider = ({ children }) => {
       setTimeout(() => setIsSyncing(false), 300);
     });
     
-    syncService.requestSync();
-  }, [currentRoom?.id]);
+    // Add timestamp and client position data to improve sync accuracy
+    syncService.requestSync({
+      clientTime: Date.now(),
+      currentPosition: currentPosition,
+      lastSyncTime: syncService.getLastSyncTime()
+    });
+  }, [currentRoom?.id, currentPosition]);
 
   // Hàm thiết lập phòng từ dữ liệu nhận được
   const setStatRoom = useCallback((room) => {
@@ -70,6 +75,47 @@ export const MusicContextProvider = ({ children }) => {
     setCurrentPosition(room.currentPosition || 0);
   }, []);
 
+  // Chuyển đến bài tiếp theo - MOVED EARLIER to fix the reference error
+  const playNext = useCallback(() => {
+    // Thông báo server chuyển bài (kể cả khi queue trống, để xóa bài hiện tại)
+    if (currentRoom?.id) {
+      setIsSyncing(true); // Đánh dấu đang đồng bộ ngay từ đầu
+      
+      fetch(`/.proxy/api/playback/${currentRoom.id}/next`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Không thể chuyển bài');
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Kết quả chuyển bài:', data);
+        
+        // Nếu không có bài hát hiện tại sau khi chuyển bài, cập nhật trạng thái local
+        if (!data.currentSong) {
+          setCurrentSong(null);
+          setIsPlaying(false);
+          setCurrentPosition(0);
+        }
+        
+        // Server sẽ gửi lại thông tin cập nhật qua socket nên không cần cập nhật thêm
+      })
+      .catch(error => {
+        console.error('Lỗi khi chuyển bài tiếp theo:', error);
+        toast.error('Không thể chuyển bài');
+      })
+      .finally(() => {
+        setTimeout(() => setIsSyncing(false), 500);
+      });
+    }
+  }, [currentRoom?.id, token]);
+
   // Cập nhật phòng khi có thay đổi
   useEffect(() => {
     if (currentRoom) {
@@ -83,7 +129,38 @@ export const MusicContextProvider = ({ children }) => {
       const cleanup = trackPlayerService.initialize(audioRef.current, currentRoom?.id);
       
       // Đăng ký callbacks
-      trackPlayerService.onProgress((position) => setCurrentPosition(position));
+      trackPlayerService.onProgress((position, isTrackEnded) => {
+        // Only update if the position changes significantly to avoid too many rerenders
+        if (Math.abs(position - currentPosition) > 0.5) {
+          setCurrentPosition(position);
+        }
+        
+        // Handle track ended indicator from the progress callback
+        if (isTrackEnded && currentRoom?.id && currentSong) {
+          console.log('Track end indicator received in progress callback');
+          
+          // Make multiple sync requests with increasing delays to ensure next song loads
+          syncService.requestSync({
+            reason: 'trackEndedProgress',
+            songId: currentSong.id,
+            timestamp: Date.now()
+          });
+          
+          // Fallback sync requests with delays for reliability
+          setTimeout(() => {
+            syncFromServer();
+          }, 1000);
+          
+          setTimeout(() => {
+            // Only send another sync if we're still not playing anything new
+            if (!isPlaying) {
+              console.log('Still no playback after track end, requesting final sync');
+              syncFromServer();
+            }
+          }, 3000);
+        }
+      });
+      
       trackPlayerService.onPlay(() => setIsPlaying(true));
       trackPlayerService.onPause(() => setIsPlaying(false));
       trackPlayerService.onEnded(() => {
@@ -91,20 +168,70 @@ export const MusicContextProvider = ({ children }) => {
         setCurrentPosition(0);
         
         if (currentRoom?.id && currentSong) {
+          console.log('Track ended detected in MusicContextProvider');
+          
+          // Report track ended via multiple channels to ensure reliability
           socketService.reportEvent({
             type: 'trackEnded',
             songId: currentSong.id,
-            roomId: currentRoom.id
+            roomId: currentRoom.id,
+            timestamp: Date.now()
+          }).catch(err => {
+            console.error('Failed to report track ended via regular channel:', err);
+            
+            // Fallback: also send via direct socket event
+            socketService.socket.emit('clientEvent', {
+              type: 'trackEnded',
+              songId: currentSong.id,
+              roomId: currentRoom.id,
+              timestamp: Date.now()
+            });
           });
           
-          // Yêu cầu đồng bộ để nhận bài kế tiếp
-          syncService.requestSync();
+          // Immediate sync request
+          syncService.requestSync({
+            reason: 'trackEnded',
+            songId: currentSong.id,
+            timestamp: Date.now()
+          });
+          
+          // Multiple fallback sync requests with increasing delays
+          const syncDelays = [1000, 3000, 6000];
+          
+          syncDelays.forEach(delay => {
+            setTimeout(() => {
+              // Only send sync if we're still on the same song or not playing
+              if (currentSongIdRef.current === currentSong.id || !isPlaying) {
+                console.log(`Still no playback after track end, requesting sync after ${delay}ms`);
+                syncFromServer();
+              }
+            }, delay);
+          });
+          
+          // Final fallback - directly call playNext after a longer timeout
+          setTimeout(() => {
+            // Only force playNext if we're still on the same song or not playing
+            if (currentSongIdRef.current === currentSong.id || !isPlaying) {
+              console.log('Track ended recovery: forcing playNext after 8s');
+              playNext(); 
+            }
+          }, 8000);
+        }
+      });
+      
+      // Register error handler to detect audio failures
+      trackPlayerService.onError((error) => {
+        if (currentRoom?.id && currentSong) {
+          console.error('Audio error in player:', error);
+          
+          // Request sync when audio errors occur
+          syncFromServer();
         }
       });
       
       return cleanup;
     }
-  }, [audioRef, currentRoom?.id, currentSong]);
+  }, [audioRef, currentRoom?.id, currentSong, syncFromServer, isPlaying, playNext, currentPosition]);
 
   // Khởi tạo các services
   useEffect(() => {
@@ -119,6 +246,7 @@ export const MusicContextProvider = ({ children }) => {
     if (!currentSong) {
       setIsNoSong(true);
       setLyrics(null); // Clear lyrics when no song is playing
+      setCurrentPosition(0); // Reset position when no song
       return;
     }
     
@@ -134,6 +262,9 @@ export const MusicContextProvider = ({ children }) => {
     
     // Cập nhật trình phát với bài hát mới
     trackPlayerService.loadTrack(currentSong, isPlaying, resumePosition);
+    
+    // Ensure position is updated in UI
+    setCurrentPosition(resumePosition);
     
     // Xóa vị trí phát đã sử dụng
     resumePositionRef.current = null;
@@ -190,6 +321,28 @@ export const MusicContextProvider = ({ children }) => {
         if (data.queue) {
           setQueue(data.queue);
           queueService.updateQueue(data.queue);
+        } else {
+          // If we receive just a queue update notification without data, fetch the queue
+          if (currentRoom?.id) {
+            fetch(`/.proxy/api/queue/${currentRoom.id}/`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            })
+            .then(response => {
+              if (!response.ok) throw new Error('Failed to fetch queue');
+              return response.json();
+            })
+            .then(queueData => {
+              if (Array.isArray(queueData)) {
+                setQueue(queueData);
+                queueService.updateQueue(queueData);
+              }
+            })
+            .catch(error => {
+              console.error('Error fetching queue:', error);
+            });
+          }
         }
       });
 
@@ -411,47 +564,6 @@ export const MusicContextProvider = ({ children }) => {
       });
     }
   }, [currentSong, isPlaying, currentRoom?.id, token]);
-
-  // Chuyển đến bài tiếp theo
-  const playNext = useCallback(() => {
-    // Thông báo server chuyển bài (kể cả khi queue trống, để xóa bài hiện tại)
-    if (currentRoom?.id) {
-      setIsSyncing(true); // Đánh dấu đang đồng bộ ngay từ đầu
-      
-      fetch(`/.proxy/api/playback/${currentRoom.id}/next`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Không thể chuyển bài');
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log('Kết quả chuyển bài:', data);
-        
-        // Nếu không có bài hát hiện tại sau khi chuyển bài, cập nhật trạng thái local
-        if (!data.currentSong) {
-          setCurrentSong(null);
-          setIsPlaying(false);
-          setCurrentPosition(0);
-        }
-        
-        // Server sẽ gửi lại thông tin cập nhật qua socket nên không cần cập nhật thêm
-      })
-      .catch(error => {
-        console.error('Lỗi khi chuyển bài tiếp theo:', error);
-        toast.error('Không thể chuyển bài');
-      })
-      .finally(() => {
-        setTimeout(() => setIsSyncing(false), 500);
-      });
-    }
-  }, [currentRoom?.id, token]);
 
   // Di chuyển đến vị trí cụ thể
   const seekTo = useCallback((position) => {

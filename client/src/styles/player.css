@@ -716,7 +716,7 @@
 
 .participants-grid{
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 8px;
 }
 
@@ -725,6 +725,10 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
+    padding: 8px;
+    background-color: var(--surface-primary);
+    border-radius: 8px;
+    transition: background-color 0.2s, transform 0.2s;
 }
 
 .participant-item img {

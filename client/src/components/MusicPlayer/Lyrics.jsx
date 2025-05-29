@@ -20,6 +20,22 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
       try {
         const fetchedLyrics = await lyricsService.getLyrics(currentSong);
         if (fetchedLyrics) {
+          // Process lyrics if needed
+          if (!fetchedLyrics.lines && fetchedLyrics.plainLyrics) {
+            // Convert plain text lyrics to lines format
+            fetchedLyrics.lines = fetchedLyrics.plainLyrics
+              .split('\n')
+              .map((text, index) => ({ 
+                time: index * 5000, // Add estimated timestamps (5 sec per line)
+                text: text.trim() || " " 
+              }));
+          }
+          
+          // Ensure we always have lines array even if empty
+          if (!fetchedLyrics.lines) {
+            fetchedLyrics.lines = [];
+          }
+          
           setLyrics(fetchedLyrics);
           console.log('Lyrics found', fetchedLyrics);
         } else {
@@ -102,6 +118,9 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
     );
   }
   
+  // Safeguard against missing lines
+  const hasLines = lyrics && Array.isArray(lyrics.lines) && lyrics.lines.length > 0;
+  
   return (
     <div className="lyrics-container" ref={lyricsContainerRef}>
       <div className="lyrics-header">
@@ -110,14 +129,20 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
         {lyrics.album && <p className="lyrics-album">{lyrics.album}</p>}
       </div>
       <div className="lyrics-content">
-        {lyrics.lines.map((line, index) => (
-          <div 
-            key={index} 
-            className={`lyric-line lyric-line-${index} ${index === activeLyricIndex ? 'active' : ''}`}
-          >
-            {line.text || " "}
+        {hasLines ? (
+          lyrics.lines.map((line, index) => (
+            <div 
+              key={index} 
+              className={`lyric-line lyric-line-${index} ${index === activeLyricIndex ? 'active' : ''}`}
+            >
+              {line.text || " "}
+            </div>
+          ))
+        ) : (
+          <div className="lyric-line">
+            {lyrics.plainLyrics || "Lyrics format not supported"}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
