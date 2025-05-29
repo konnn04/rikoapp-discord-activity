@@ -7,6 +7,7 @@ import roomRoutes from './routes/roomRoutes.js';
 import proxyRoutes from './routes/proxyRoutes.js';
 import queueRoutes from './routes/queueRoutes.js';
 import playbackRoutes from './routes/playbackRoutes.js';
+import lyricsRoutes from './routes/lyricsRoutes.js';
 
 const app = express();
 app.use(cors({
@@ -31,6 +32,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/queue', queueRoutes);
 app.use('/api/playback', playbackRoutes);
 app.use('/api/proxy', proxyRoutes);
+app.use('/api/lyrics', lyricsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

@@ -5,15 +5,15 @@ import { getYouTubeAPI } from '../services/youtubeijsService.js';
  */
 export const searchMusic = async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, type } = req.query;
 
     if (!query) {
       return res.status(400).json({ error: 'Search query is required' });
     }
     
     const youtubeAPI = await getYouTubeAPI();
-    const results = await youtubeAPI.search(query);
-    
+    const results = await youtubeAPI.search(query, type);
+
     res.json({ results });
   } catch (error) {
     console.error('Music search error:', error);

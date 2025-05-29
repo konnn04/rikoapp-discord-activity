@@ -11,7 +11,7 @@ class SyncService {
   }
 
   /**
-   * Khởi tạo service với ID phòng
+   * Initialize service with room ID
    */
   initialize(roomId) {
     this.roomId = roomId;
@@ -19,29 +19,29 @@ class SyncService {
   }
 
   /**
-   * Yêu cầu đồng bộ từ server
+   * Request sync from server
    */
   requestSync() {
     if (!this.roomId) {
-      console.error('[SyncService] Không thể yêu cầu đồng bộ: Không có ID phòng');
+      console.error('[SyncService] Cannot request sync: No room ID');
       return false;
     }
 
     if (this.syncInProgress) {
-      console.log('[SyncService] Đồng bộ đang diễn ra, bỏ qua yêu cầu mới');
+      console.log('[SyncService] Sync already in progress, skipping new request');
       return false;
     }
 
     this.syncInProgress = true;
     
-    console.log('[SyncService] Đang yêu cầu đồng bộ cho phòng:', this.roomId);
+    console.log('[SyncService] Requesting sync for room:', this.roomId);
     
     socketService.requestSync(this.roomId);
     
-    // Đặt timeout để tự reset trạng thái đồng bộ nếu không nhận được phản hồi
+    // Set timeout to auto-reset sync state if no response
     setTimeout(() => {
       if (this.syncInProgress) {
-        console.warn('[SyncService] Đồng bộ timeout, reset trạng thái');
+        console.warn('[SyncService] Sync timeout, resetting state');
         this.syncInProgress = false;
       }
     }, 5000);
@@ -50,7 +50,7 @@ class SyncService {
   }
 
   /**
-   * Cập nhật thông tin đồng bộ
+   * Update sync information
    */
   updateSyncInfo(serverTime) {
     if (!serverTime) return;
@@ -63,11 +63,11 @@ class SyncService {
       this.onSyncCompleteCallback();
     }
     
-    console.log(`[SyncService] Cập nhật độ lệch thời gian: ${this.serverTimeOffset}ms`);
+    console.log(`[SyncService] Updated time offset: ${this.serverTimeOffset}ms`);
   }
 
   /**
-   * Tính toán vị trí hiện tại dựa trên thông tin từ server
+   * Calculate current position based on server info
    */
   calculateCurrentPosition(basePosition, startTimestamp, serverTime) {
     if (!startTimestamp || !serverTime) return basePosition;
@@ -76,7 +76,7 @@ class SyncService {
     const elapsedSinceSync = (serverTimeNow - serverTime) / 1000;
     const elapsedSinceStart = (serverTimeNow - startTimestamp) / 1000;
     
-    // Sử dụng thời gian trôi qua từ khi bắt đầu nếu có
+    // Use time elapsed since start if available
     if (elapsedSinceStart >= 0) {
       return basePosition + elapsedSinceSync;
     }
@@ -85,14 +85,14 @@ class SyncService {
   }
 
   /**
-   * Đăng ký callback khi đồng bộ hoàn tất
+   * Register sync completion callback
    */
   onSyncComplete(callback) {
     this.onSyncCompleteCallback = callback;
   }
 
   /**
-   * Lấy trạng thái đồng bộ hiện tại
+   * Get current sync status
    */
   getSyncStatus() {
     return {

@@ -21,6 +21,7 @@ class SocketService {
     this.reconnectTimeout = null;
     this.throttledActions = {}; // For throttling actions
     this.lastSyncTime = 0;
+    this.lastReportedEvents = {}; // Track last reported events
   }
 
   connect(token) {
@@ -215,9 +216,17 @@ class SocketService {
     const key = `event-${eventData.type}-${eventData.songId || 'unknown'}`;
     
     if (this.isSocketConnected()) {
+      // Kiểm tra trùng lặp sự kiện
+      const now = Date.now();
+      if (this.lastReportedEvents[key] && now - this.lastReportedEvents[key] < 5000) {
+        console.log('Duplicate event submission detected, skipping:', eventData.type);
+        return; // Tránh gửi sự kiện trùng lặp
+      }
+      
       this.throttle(key, () => {
         console.log('Reporting event to server:', eventData.type);
         this.socket.emit('clientEvent', eventData);
+        this.lastReportedEvents[key] = now; // Cập nhật thời gian sự kiện vừa gửi
       }, 2000);
     }
   }

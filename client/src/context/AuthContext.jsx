@@ -35,7 +35,8 @@ export const AuthProvider = ({ children }) => {
             scope: [
                 "identify",
                 "guilds",
-                "applications.commands"
+                "applications.commands",
+                "rpc.activities.write"
             ],
         });
         const { access_token }  = await exchangeToken(code)
@@ -71,7 +72,8 @@ export const AuthProvider = ({ children }) => {
             channelId,
             guildId,
             logout,
-            loginDiscordSDK
+            loginDiscordSDK,
+            discordSdk // Expose Discord SDK to consumers
         }}>
             {children}
         </AuthContext.Provider>

@@ -19,13 +19,13 @@ class TrackPlayerService {
   }
 
   /**
-   * Khởi tạo audio player với tham chiếu đến phần tử audio
+   * Initialize audio player with reference to audio element
    */
   initialize(audioRef, roomId) {
     this.audioRef = audioRef;
     this.roomId = roomId;
     
-    // Gắn các event handlers
+    // Attach event handlers
     if (this.audioRef) {
       this.audioRef.addEventListener('error', this.handleError);
       this.audioRef.addEventListener('ended', this.handleEnded);
@@ -39,7 +39,7 @@ class TrackPlayerService {
   }
 
   /**
-   * Giải phóng tài nguyên
+   * Release resources
    */
   cleanup() {
     if (this.audioRef) {
@@ -53,11 +53,11 @@ class TrackPlayerService {
   }
 
   /**
-   * Thiết lập bài hát và tự động phát nếu cần
+   * Set up song and auto-play if needed
    */
   loadTrack(song, shouldPlay = false, position = 0) {
     if (!this.audioRef || !song) {
-      console.error('Không thể tải bài hát:', song);
+      console.error('Cannot load track:', song);
       return false;
     }
 
@@ -77,21 +77,21 @@ class TrackPlayerService {
     }
 
     try {
-      // Lưu ID bài hát hiện tại
+      // Save current song ID
       this.currentSongId = song.id;
 
-      // Cập nhật nguồn phát nhạc
+      // Update playback source
       const proxiedUrl = song.streamUrl.startsWith('http')
         ? `${byProxy(song.streamUrl)}&_t=${Date.now()}`
         : song.streamUrl;
 
-      console.log(`[TrackPlayer] Đang tải bài hát: ${song.title?.text || song.title || 'Unknown'} tại vị trí ${position}s`);
+      console.log(`[TrackPlayer] Loading track: ${song.title?.text || song.title || 'Unknown'} at position ${position}s`);
 
       this.audioRef.src = proxiedUrl;
       this.audioRef.load();
       this.audioRef.volume = this.volume;
 
-      // Thiết lập vị trí phát
+      // Set playback position
       if (position > 0) {
         this.audioRef.currentTime = position;
         this.currentPosition = position;
@@ -99,18 +99,18 @@ class TrackPlayerService {
         this.currentPosition = 0;
       }
 
-      // Phát nhạc nếu cần
+      // Play if needed
       if (shouldPlay) {
         this.isPlaying = true;
         
         const playPromise = this.audioRef.play();
         if (playPromise !== undefined) {
           playPromise.catch(error => {
-            console.error('[TrackPlayer] Lỗi autoplay:', error);
+            console.error('[TrackPlayer] Autoplay error:', error);
             this.isPlaying = false;
             
             if (error.name === 'NotAllowedError') {
-              toast.info('Nhấp vào bất kỳ đâu để phát nhạc');
+              toast.info('Click anywhere to start playback');
               this.setupAutoplayOnInteraction();
             }
           });
@@ -122,13 +122,13 @@ class TrackPlayerService {
 
       return true;
     } catch (error) {
-      console.error('[TrackPlayer] Lỗi khi tải bài hát:', error);
+      console.error('[TrackPlayer] Error loading track:', error);
       return false;
     }
   }
 
   /**
-   * Thiết lập tự động phát khi người dùng tương tác
+   * Set up autoplay when user interacts
    */
   setupAutoplayOnInteraction() {
     const handleUserInteraction = () => {
@@ -137,7 +137,7 @@ class TrackPlayerService {
       
       if (this.audioRef && this.isPlaying) {
         this.audioRef.play().catch(e => 
-          console.error('[TrackPlayer] Vẫn không thể phát sau tương tác:', e)
+          console.error('[TrackPlayer] Still cannot play after interaction:', e)
         );
       }
     };
@@ -147,7 +147,7 @@ class TrackPlayerService {
   }
 
   /**
-   * Phát nhạc
+   * Play audio
    */
   play() {
     if (!this.audioRef) return false;
@@ -156,10 +156,10 @@ class TrackPlayerService {
       const playPromise = this.audioRef.play();
       if (playPromise !== undefined) {
         playPromise.catch(error => {
-          console.error('[TrackPlayer] Lỗi khi phát:', error);
+          console.error('[TrackPlayer] Error playing:', error);
           
           if (error.name === 'NotAllowedError') {
-            toast.info('Nhấp vào bất kỳ đâu để phát nhạc');
+            toast.info('Click anywhere to play music');
             this.setupAutoplayOnInteraction();
           }
           
@@ -170,13 +170,13 @@ class TrackPlayerService {
       this.isPlaying = true;
       return true;
     } catch (error) {
-      console.error('[TrackPlayer] Ngoại lệ khi phát:', error);
+      console.error('[TrackPlayer] Exception when playing:', error);
       return false;
     }
   }
 
   /**
-   * Tạm dừng phát nhạc
+   * Pause audio
    */
   pause() {
     if (!this.audioRef) return false;
@@ -186,13 +186,13 @@ class TrackPlayerService {
       this.isPlaying = false;
       return true;
     } catch (error) {
-      console.error('[TrackPlayer] Lỗi khi tạm dừng:', error);
+      console.error('[TrackPlayer] Error pausing:', error);
       return false;
     }
   }
 
   /**
-   * Chuyển đổi giữa phát và tạm dừng
+   * Toggle between play and pause
    */
   togglePlayback() {
     if (!this.audioRef) return false;
@@ -205,7 +205,7 @@ class TrackPlayerService {
   }
 
   /**
-   * Di chuyển đến vị trí cụ thể
+   * Seek to a specific position
    */
   seekTo(position) {
     if (!this.audioRef) return false;
@@ -215,13 +215,13 @@ class TrackPlayerService {
       this.currentPosition = position;
       return true;
     } catch (error) {
-      console.error('[TrackPlayer] Lỗi khi di chuyển vị trí:', error);
+      console.error('[TrackPlayer] Error seeking:', error);
       return false;
     }
   }
 
   /**
-   * Thiết lập âm lượng
+   * Set volume level
    */
   setVolume(volume) {
     if (!this.audioRef) return false;
@@ -231,25 +231,25 @@ class TrackPlayerService {
       this.audioRef.volume = volume;
       return true;
     } catch (error) {
-      console.error('[TrackPlayer] Lỗi khi thiết lập âm lượng:', error);
+      console.error('[TrackPlayer] Error setting volume:', error);
       return false;
     }
   }
 
   /**
-   * Xử lý sự kiện lỗi
+   * Handle error events
    */
   handleError = (e) => {
     const error = e?.target?.error;
-    console.error('[TrackPlayer] Lỗi phát nhạc:', error);
+    console.error('[TrackPlayer] Playback error:', error);
     
-    // Báo lỗi lên server
+    // Report error to server
     if (this.roomId && this.currentSongId) {
       socketService.reportError({
         type: 'playbackError',
         songId: this.currentSongId,
         error: error?.name || 'unknown',
-        message: error?.message || 'Lỗi phát nhạc không xác định',
+        message: error?.message || 'Unknown playback error',
         roomId: this.roomId
       });
     }
@@ -260,19 +260,19 @@ class TrackPlayerService {
   }
 
   /**
-   * Xử lý sự kiện kết thúc bài hát
+   * Handle track ended event
    */
   handleEnded = () => {
-    // Dừng phát nhạc và reset vị trí
+    // Stop playback and reset position
     this.isPlaying = false;
     if (this.audioRef) {
       this.audioRef.pause();
       this.audioRef.currentTime = 0;
     }
     
-    // Báo lên server khi bài hát kết thúc
+    // Report to server when track ends
     if (this.roomId && this.currentSongId) {
-      console.log('[TrackPlayer] Bài hát kết thúc, thông báo server và yêu cầu đồng bộ');
+      console.log('[TrackPlayer] Track ended, notifying server and requesting sync');
       
       socketService.reportEvent({
         type: 'trackEnded',
@@ -280,7 +280,7 @@ class TrackPlayerService {
         roomId: this.roomId
       });
       
-      // Chủ động yêu cầu đồng bộ ngay lập tức
+      // Proactively request sync
       setTimeout(() => {
         socketService.requestSync(this.roomId);
       }, 300);
@@ -292,7 +292,7 @@ class TrackPlayerService {
   }
 
   /**
-   * Xử lý sự kiện cập nhật thời gian
+   * Handle time update event
    */
   handleTimeUpdate = () => {
     if (!this.audioRef) return;
@@ -305,7 +305,7 @@ class TrackPlayerService {
   }
 
   /**
-   * Xử lý sự kiện phát
+   * Handle play event
    */
   handlePlay = () => {
     this.isPlaying = true;
@@ -316,7 +316,7 @@ class TrackPlayerService {
   }
 
   /**
-   * Xử lý sự kiện tạm dừng
+   * Handle pause event
    */
   handlePause = () => {
     this.isPlaying = false;
@@ -327,12 +327,12 @@ class TrackPlayerService {
   }
 
   /**
-   * Xử lý sự kiện bị treo
+   * Handle stalled event
    */
   handleStalled = () => {
-    console.warn('[TrackPlayer] Phát nhạc bị treo');
+    console.warn('[TrackPlayer] Playback stalled');
     
-    // Báo lên server
+    // Report to server
     if (this.roomId && this.currentSongId) {
       socketService.reportError({
         type: 'playbackStalled',
@@ -343,35 +343,35 @@ class TrackPlayerService {
   }
 
   /**
-   * Đăng ký callback xử lý lỗi
+   * Register error callback
    */
   onError(callback) {
     this.onErrorCallback = callback;
   }
 
   /**
-   * Đăng ký callback xử lý kết thúc bài hát
+   * Register ended callback
    */
   onEnded(callback) {
     this.onEndedCallback = callback;
   }
 
   /**
-   * Đăng ký callback xử lý cập nhật tiến trình
+   * Register progress update callback
    */
   onProgress(callback) {
     this.onProgressCallback = callback;
   }
 
   /**
-   * Đăng ký callback xử lý sự kiện phát
+   * Register play event callback
    */
   onPlay(callback) {
     this.onPlayCallback = callback;
   }
 
   /**
-   * Đăng ký callback xử lý sự kiện tạm dừng
+   * Register pause event callback
    */
   onPause(callback) {
     this.onPauseCallback = callback;

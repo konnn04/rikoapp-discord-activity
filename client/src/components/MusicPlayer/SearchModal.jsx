@@ -12,6 +12,7 @@ const SearchModal = ({ isOpen, onClose }) => {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [waitingAdded, setWaitingAdded] = useState(false)
+  const [onlyMusic, setOnlyMusic] = useState(false) 
   const searchTimeoutRef = useRef(null)
   
   const handleSearch = async () => {
@@ -19,7 +20,7 @@ const SearchModal = ({ isOpen, onClose }) => {
     
     setIsSearching(true)
     try {
-      const data = await searchSong(query);
+      const data = await searchSong(query, onlyMusic ? 'music' : 'mixed')
       setSearchResults(data.results || [])
     } catch (error) {
       console.error('Search error:', error)
@@ -80,7 +81,18 @@ const SearchModal = ({ isOpen, onClose }) => {
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             />
-            <button 
+            <div className='search-type'>
+              <input
+                type='checkbox'
+                id='search-music'
+                name='search-music'
+                value='music'
+                checked={onlyMusic}
+                onChange={(e) => setOnlyMusic(e.target.checked)}
+              />
+              <label htmlFor='search-music'>Only Music</label>
+            </div>
+            <button
               className="search-button"
               onClick={handleSearch}
               disabled={isSearching || !query.trim()}

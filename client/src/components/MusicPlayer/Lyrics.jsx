@@ -21,13 +21,13 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
         const fetchedLyrics = await lyricsService.getLyrics(currentSong);
         if (fetchedLyrics) {
           setLyrics(fetchedLyrics);
-          console.log('Đã tìm thấy lời bài hát', fetchedLyrics);
+          console.log('Lyrics found', fetchedLyrics);
         } else {
-          setError('Không tìm thấy lời bài hát');
+          setError('No lyrics found');
         }
       } catch (err) {
-        console.error('Lỗi khi tải lời bài hát:', err);
-        setError('Lỗi khi tải lời bài hát');
+        console.error('Error loading lyrics:', err);
+        setError('Error loading lyrics');
       } finally {
         setLoading(false);
         lastSongIdRef.current = currentSong.id;
@@ -73,7 +73,7 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
     return (
       <div className="lyrics-container loading">
         <div className="lyrics-spinner"></div>
-        <p>Đang tìm lời bài hát...</p>
+        <p>Searching for lyrics...</p>
       </div>
     );
   }
@@ -83,11 +83,21 @@ const Lyrics = ({ currentSong, currentPosition, isVisible = true }) => {
       <div className="lyrics-container error">
         <p className="no-lyrics">
           <i className="bi bi-music-note-list"></i>
-          {error || 'Không tìm thấy lời bài hát'}
+          {error || 'No lyrics found'}
         </p>
         <p className="suggestion">
-          Thử tìm kiếm: "{currentSong?.title?.text || currentSong?.title || 'Unknown'}"
+          Try searching: "{currentSong?.title?.text || currentSong?.title || 'Unknown'}"
         </p>
+        
+        {/* <button 
+          className="youtube-button lyrics-youtube-btn" 
+          onClick={() => {
+            const url = lyricsService.getYouTubeSearchUrl(currentSong);
+            if (url) window.open(url, '_blank');
+          }}
+        >
+          <i className="bi bi-youtube"></i> Find on YouTube
+        </button> */}
       </div>
     );
   }

@@ -11,7 +11,7 @@ class QueueService {
   }
 
   /**
-   * Khởi tạo service với id phòng
+   * Initialize service with room ID
    */
   initialize(roomId) {
     this.roomId = roomId;
@@ -19,11 +19,11 @@ class QueueService {
   }
 
   /**
-   * Cập nhật hàng đợi
+   * Update queue
    */
   updateQueue(newQueue) {
     if (!Array.isArray(newQueue)) {
-      console.error('[QueueService] Hàng đợi không hợp lệ:', newQueue);
+      console.error('[QueueService] Invalid queue:', newQueue);
       return false;
     }
     
@@ -38,23 +38,23 @@ class QueueService {
   }
 
   /**
-   * Lấy hàng đợi hiện tại
+   * Get current queue
    */
   getQueue() {
     return [...this.queue];
   }
 
   /**
-   * Thêm bài hát vào hàng đợi
+   * Add song to queue
    */
   async addToQueue(song) {
     if (!song || !song.id) {
-      toast.error('Dữ liệu bài hát không hợp lệ');
+      toast.error('Invalid song data');
       return false;
     }
 
     if (!this.roomId) {
-      toast.error('Không tìm thấy ID phòng');
+      toast.error('Room ID not found');
       return false;
     }
 
@@ -62,7 +62,7 @@ class QueueService {
       // Fix: Use proper API call with token and fix the request body format
       const token = localStorage.getItem('discord_token');
       if (!token) {
-        toast.error('Bạn cần đăng nhập để thêm bài hát');
+        toast.error('You need to be logged in to add songs');
         return false;
       }
 
@@ -72,42 +72,42 @@ class QueueService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        // Fix: Đúng định dạng yêu cầu của API
+        // Fix: Proper API request format
         body: JSON.stringify({ song })
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Không thể thêm bài hát vào hàng đợi');
+        throw new Error(errorData.message || 'Could not add song to queue');
       }
       
       const result = await response.json();
       
       if (result.success) {
-        toast.info('Đang xử lý yêu cầu...');
+        toast.info('Processing request...');
         return true;
       } else {
-        toast.error(result.message || 'Không thể thêm bài hát vào hàng đợi');
+        toast.error(result.message || 'Could not add song to queue');
         return false;
       }
     } catch (error) {
-      console.error('[QueueService] Lỗi khi thêm vào hàng đợi:', error);
-      toast.error(error.message || 'Lỗi khi thêm bài hát vào hàng đợi');
+      console.error('[QueueService] Error adding to queue:', error);
+      toast.error(error.message || 'Error adding song to queue');
       return false;
     }
   }
 
   /**
-   * Xóa bài hát khỏi hàng đợi
+   * Remove song from queue
    */
   async removeFromQueue(index) {
     if (!this.roomId) {
-      toast.error('Không tìm thấy ID phòng');
+      toast.error('Room ID not found');
       return false;
     }
 
     if (index < 0 || index >= this.queue.length) {
-      toast.error('Chỉ số không hợp lệ');
+      toast.error('Invalid index');
       return false;
     }
 
@@ -123,24 +123,24 @@ class QueueService {
       });
 
       if (!response.ok) {
-        throw new Error('Lỗi khi xóa bài hát');
+        throw new Error('Error removing song');
       }
 
-      // Server sẽ gửi lại hàng đợi mới qua socket
+      // Server will send back updated queue via socket
       return true;
     } catch (error) {
-      console.error('[QueueService] Lỗi khi xóa khỏi hàng đợi:', error);
-      toast.error('Không thể xóa bài hát khỏi hàng đợi');
+      console.error('[QueueService] Error removing from queue:', error);
+      toast.error('Could not remove song from queue');
       return false;
     }
   }
 
   /**
-   * Xóa toàn bộ hàng đợi
+   * Clear queue
    */
   async clearQueue() {
     if (!this.roomId) {
-      toast.error('Không tìm thấy ID phòng');
+      toast.error('Room ID not found');
       return false;
     }
 
@@ -154,24 +154,24 @@ class QueueService {
       });
 
       if (!response.ok) {
-        throw new Error('Lỗi khi xóa hàng đợi');
+        throw new Error('Error clearing queue');
       }
 
-      // Server sẽ gửi lại hàng đợi trống qua socket
+      // Server will send back empty queue via socket
       return true;
     } catch (error) {
-      console.error('[QueueService] Lỗi khi xóa hàng đợi:', error);
-      toast.error('Không thể xóa hàng đợi');
+      console.error('[QueueService] Error clearing queue:', error);
+      toast.error('Could not clear queue');
       return false;
     }
   }
 
   /**
-   * Thay đổi thứ tự bài hát trong hàng đợi
+   * Reorder songs in queue
    */
   async reorderQueue(fromIndex, toIndex) {
     if (!this.roomId) {
-      toast.error('Không tìm thấy ID phòng');
+      toast.error('Room ID not found');
       return false;
     }
 
@@ -186,20 +186,20 @@ class QueueService {
       });
 
       if (!response.ok) {
-        throw new Error('Lỗi khi sắp xếp lại hàng đợi');
+        throw new Error('Error reordering queue');
       }
 
-      // Server sẽ gửi lại hàng đợi mới qua socket
+      // Server will send back updated queue via socket
       return true;
     } catch (error) {
-      console.error('[QueueService] Lỗi khi sắp xếp lại hàng đợi:', error);
-      toast.error('Không thể sắp xếp lại hàng đợi');
+      console.error('[QueueService] Error reordering queue:', error);
+      toast.error('Could not reorder queue');
       return false;
     }
   }
 
   /**
-   * Đăng ký callback nhận cập nhật hàng đợi
+   * Register queue update callback
    */
   onQueueUpdate(callback) {
     this.onQueueUpdateCallback = callback;

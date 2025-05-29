@@ -93,9 +93,9 @@ export const byProxy = (url) => {
 };
 
 // MUSIC API
-export const searchSong = async (query) => {
+export const searchSong = async (query, type = 'mixed') => {
   const response = await axiosInstance.get(`/music/search`, {
-    params: { query }
+    params: { query, type }
   });
   return response.data;
 }

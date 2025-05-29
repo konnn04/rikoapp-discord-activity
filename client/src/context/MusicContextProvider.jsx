@@ -9,9 +9,10 @@ import trackPlayerService from '../services/trackPlayerService';
 import queueService from '../services/queueService';
 import syncService from '../services/syncService';
 import lyricsService from '../services/lyricsService';
+import discordActivityService from '../services/discordActivityService';
 
 export const MusicContextProvider = ({ children }) => {
-  const { token, isAuthenticated, channelId, user } = useAuth();
+  const { token, isAuthenticated, channelId, user, discordSdk } = useAuth();
   const [currentRoom, setCurrentRoom] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
@@ -142,11 +143,26 @@ export const MusicContextProvider = ({ children }) => {
       setIsSyncing(false);
     }, 500);
     
-    // Khi bài hát thay đổi, đánh dấu lyrics đã bị reset
-    // Nhưng không tự động tải lyrics - các component sẽ tải khi cần
-    setLyrics(null);
+    // Khi bài hát thay đổi, fetch lyrics mới
+    fetchLyrics(currentSong);
     
   }, [currentSong, isPlaying]);
+
+  // Fetch lyrics for current song
+  const fetchLyrics = async (song) => {
+    if (!song) {
+      setLyrics(null);
+      return;
+    }
+    
+    try {
+      const fetchedLyrics = await lyricsService.getLyrics(song);
+      setLyrics(fetchedLyrics);
+    } catch (error) {
+      console.error('Error fetching lyrics:', error);
+      setLyrics(null);
+    }
+  };
 
   // Xử lý thay đổi volume
   useEffect(() => {
@@ -571,6 +587,29 @@ export const MusicContextProvider = ({ children }) => {
       setTimeout(() => setIsSyncing(false), 300);
     }
   }, [currentRoom?.id, queue, token]);
+
+  // Khởi tạo Discord Activity Service khi có discordSdk
+  useEffect(() => {
+    if (discordSdk) {
+      discordActivityService.initialize(discordSdk);
+    }
+  }, [discordSdk]);
+
+  // Cập nhật Discord Activity khi bài hát hoặc trạng thái phát lại thay đổi
+  useEffect(() => {
+    if (discordSdk && discordActivityService.isReady) {
+      if (currentSong) {
+        if (isPlaying) {
+          // Only update Discord activity when needed
+          discordActivityService.updateActivity(currentSong, true, currentPosition);
+        } else {
+          discordActivityService.setPausedActivity(currentSong, currentPosition);
+        }
+      } else {
+        discordActivityService.clearActivity();
+      }
+    }
+  }, [currentSong?.id, isPlaying, discordSdk]); // Track only id and playback state changes, not position
 
   return (
     <MusicContext.Provider
