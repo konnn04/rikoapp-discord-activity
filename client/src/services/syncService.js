@@ -101,6 +101,13 @@ class SyncService {
       serverTimeOffset: this.serverTimeOffset
     };
   }
+
+  /**
+   * Get last sync time (added for compatibility)
+   */
+  getLastSyncTime() {
+    return this.lastSyncTime;
+  }
 }
 
 export default new SyncService();

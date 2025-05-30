@@ -402,67 +402,84 @@ class TrackPlayerService {
    */
   reportTrackEnded() {
     if (!this.roomId || !this.currentSongId) return;
-    
+
     // If we've already successfully reported for this track, don't repeat
     if (this.endedReportSent) return;
-    
+
     // Clear any existing timer
     if (this.endedReportTimer) {
       clearTimeout(this.endedReportTimer);
       this.endedReportTimer = null;
     }
-    
+
     console.log(`[TrackPlayer] Reporting track ended for song ${this.currentSongId}, attempt ${this.retryCount}`);
-    
+
     // Try both event reporting methods for redundancy
-    const reportPromise = socketService.reportEvent({
-      type: 'trackEnded',
-      songId: this.currentSongId,
-      roomId: this.roomId,
-      timestamp: Date.now(),
-      retryCount: this.retryCount
-    });
-    
+    let reportPromise;
+    try {
+      reportPromise = socketService.reportEvent({
+        type: 'trackEnded',
+        songId: this.currentSongId,
+        roomId: this.roomId,
+        timestamp: Date.now(),
+        retryCount: this.retryCount
+      });
+    } catch (e) {
+      reportPromise = undefined;
+    }
+
     // Also emit directly through socket as a backup
-    socketService.socket.emit('clientEvent', {
-      type: 'trackEnded',
-      songId: this.currentSongId,
-      roomId: this.roomId,
-      timestamp: Date.now(),
-      retryCount: this.retryCount
-    });
-    
-    reportPromise.then(() => {
-      console.log(`[TrackPlayer] Track ended report sent successfully after ${this.retryCount} retries`);
+    if (socketService.socket) {
+      socketService.socket.emit('clientEvent', {
+        type: 'trackEnded',
+        songId: this.currentSongId,
+        roomId: this.roomId,
+        timestamp: Date.now(),
+        retryCount: this.retryCount
+      });
+    }
+
+    // Only call .then if reportPromise is a Promise
+    if (reportPromise && typeof reportPromise.then === 'function') {
+      reportPromise.then(() => {
+        console.log(`[TrackPlayer] Track ended report sent successfully after ${this.retryCount} retries`);
+        this.endedReportSent = true;
+        this.retryCount = 0;
+
+        // Always request sync after reporting track ended
+        setTimeout(() => {
+          socketService.requestSync(this.roomId);
+        }, 500);
+      }).catch(err => {
+        console.error('[TrackPlayer] Failed to report track ended:', err);
+
+        // Retry logic with more aggressive retry timing
+        if (this.retryCount < this.maxRetries) {
+          this.retryCount++;
+          const delay = Math.min(800 * this.retryCount, 3000); // Faster retry, max 3 seconds
+
+          console.log(`[TrackPlayer] Will retry reporting track ended in ${delay}ms (attempt ${this.retryCount})`);
+
+          this.endedReportTimer = setTimeout(() => {
+            this.reportTrackEnded();
+          }, delay);
+        } else {
+          console.error('[TrackPlayer] Max retries reached for track ended reporting');
+          // Force a sync request when max retries reached
+          socketService.requestSync(this.roomId, {
+            forcedSync: true,
+            maxRetriesReached: true
+          });
+        }
+      });
+    } else {
+      // If no promise, fallback to marking as sent and requesting sync
       this.endedReportSent = true;
       this.retryCount = 0;
-      
-      // Always request sync after reporting track ended
       setTimeout(() => {
         socketService.requestSync(this.roomId);
       }, 500);
-    }).catch(err => {
-      console.error('[TrackPlayer] Failed to report track ended:', err);
-      
-      // Retry logic with more aggressive retry timing
-      if (this.retryCount < this.maxRetries) {
-        this.retryCount++;
-        const delay = Math.min(800 * this.retryCount, 3000); // Faster retry, max 3 seconds
-        
-        console.log(`[TrackPlayer] Will retry reporting track ended in ${delay}ms (attempt ${this.retryCount})`);
-        
-        this.endedReportTimer = setTimeout(() => {
-          this.reportTrackEnded();
-        }, delay);
-      } else {
-        console.error('[TrackPlayer] Max retries reached for track ended reporting');
-        // Force a sync request when max retries reached
-        socketService.requestSync(this.roomId, {
-          forcedSync: true,
-          maxRetriesReached: true
-        });
-      }
-    });
+    }
   }
 
   /**

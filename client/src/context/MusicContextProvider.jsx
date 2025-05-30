@@ -166,28 +166,45 @@ export const MusicContextProvider = ({ children }) => {
       trackPlayerService.onEnded(() => {
         setIsPlaying(false);
         setCurrentPosition(0);
-        
+
         if (currentRoom?.id && currentSong) {
           console.log('Track ended detected in MusicContextProvider');
-          
+
           // Report track ended via multiple channels to ensure reliability
-          socketService.reportEvent({
+          const reportResult = socketService.reportEvent({
             type: 'trackEnded',
             songId: currentSong.id,
             roomId: currentRoom.id,
             timestamp: Date.now()
-          }).catch(err => {
-            console.error('Failed to report track ended via regular channel:', err);
-            
-            // Fallback: also send via direct socket event
-            socketService.socket.emit('clientEvent', {
-              type: 'trackEnded',
-              songId: currentSong.id,
-              roomId: currentRoom.id,
-              timestamp: Date.now()
-            });
           });
-          
+
+          // Only call .catch if reportResult is a Promise
+          if (reportResult && typeof reportResult.then === 'function') {
+            reportResult.catch(err => {
+              console.error('Failed to report track ended via regular channel:', err);
+
+              // Fallback: also send via direct socket event
+              if (socketService.socket) {
+                socketService.socket.emit('clientEvent', {
+                  type: 'trackEnded',
+                  songId: currentSong.id,
+                  roomId: currentRoom.id,
+                  timestamp: Date.now()
+                });
+              }
+            });
+          } else {
+            // If not a promise, fallback immediately
+            if (socketService.socket) {
+              socketService.socket.emit('clientEvent', {
+                type: 'trackEnded',
+                songId: currentSong.id,
+                roomId: currentRoom.id,
+                timestamp: Date.now()
+              });
+            }
+          }
+
           // Immediate sync request
           syncService.requestSync({
             reason: 'trackEnded',
